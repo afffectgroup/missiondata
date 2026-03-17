@@ -28,6 +28,17 @@ export default function CampaignPage() {
     setSelected(p => p.length === prospects.length ? [] : prospects.map(p => p.id));
   }
 
+  async function deleteProspect(prospectId) {
+    const token = await getToken();
+    await fetch(`/api/prospects/${prospectId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setProspects(p => p.filter(x => x.id !== prospectId));
+    setSelected(s => s.filter(x => x !== prospectId));
+    showToast('Prospect supprimé');
+  }
+
   async function runEnrich() {
     if (!selected.length) { showToast('Selectionne au moins un prospect.'); return; }
     setEnriching(true);
@@ -76,17 +87,12 @@ export default function CampaignPage() {
       setCampaign(d.campaign);
       setProspects(d.prospects||[]);
       setSequences(d.sequences||[]);
-      // selected_titles: null = first time (pre-select all), [] = user cleared all, [...] = user choice
+      // selected_titles: null = first time, [] = cleared, [...] = saved choice
       if (d.campaign.selected_titles !== null && d.campaign.selected_titles !== undefined) {
         setSelectedTitles(d.campaign.selected_titles);
-      } else {
-        // First visit: pre-select all sector titles
-        const sectorTitles = JOB_TITLES_BY_SECTOR[d.campaign.client_sector] || JOB_TITLES_BY_SECTOR.default;
-        const initTitles = [...sectorTitles];
-        if (d.campaign.job_title_target && !initTitles.includes(d.campaign.job_title_target)) {
-          initTitles.push(d.campaign.job_title_target);
-        }
-        setSelectedTitles(initTitles);
+      } else if (d.campaign.job_title_target) {
+        // First visit: only pre-select the chosen job title
+        setSelectedTitles([d.campaign.job_title_target]);
       }
     }
   }
@@ -402,7 +408,7 @@ export default function CampaignPage() {
                       <th style={{ padding:'9px 12px', width:'36px' }}>
                         <input type="checkbox" checked={selected.length === prospects.length && prospects.length > 0} onChange={toggleAll} style={{ cursor:'pointer', width:'14px', height:'14px' }} />
                       </th>
-                      {['Nom','Poste','Entreprise','Email','Score','LinkedIn'].map(h=>(
+                      {['Nom','Poste','Entreprise','Email','Score','LinkedIn',''].map(h=>(
                         <th key={h} style={{ padding:'9px 12px', textAlign:'left', fontSize:'9px', fontWeight:'700', letterSpacing:'1.2px', textTransform:'uppercase', color:'var(--muted)', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -440,6 +446,14 @@ export default function CampaignPage() {
                             ? <a href={p.linkedin_url} target="_blank" rel="noopener" style={{ color:'var(--mf-blue)', fontWeight:'600', fontSize:'12px' }}>↗ LinkedIn</a>
                             : '—'
                           }
+                        </td>
+                        <td style={{ padding:'9px 6px' }}>
+                          <button onClick={() => deleteProspect(p.id)} title="Supprimer"
+                            style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', padding:'4px', borderRadius:'4px', lineHeight:1 }}
+                            onMouseOver={e => e.currentTarget.style.color='var(--red)'}
+                            onMouseOut={e => e.currentTarget.style.color='var(--muted)'}>
+                            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                          </button>
                         </td>
                       </tr>
                     ))}
