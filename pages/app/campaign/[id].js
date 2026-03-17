@@ -279,7 +279,7 @@ export default function CampaignPage() {
               {[
                 { n:1, title:'Mirroring IA', desc:'L\'IA analyse le profil client et génère les critères de ciblage (concurrents directs + indirects)', action: runMirror, label:'Lancer le mirroring', done: !!mirrorCriteria },
                 { n:2, title:'Recherche Icypeas', desc:'Génère la base de 50 prospects LinkedIn selon les critères du mirroring', action: runSearch, label:'Lancer la recherche', done: prospects.length > 0 },
-                { n:3, title:'Séquences IA', desc:'Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts, basés sur ton cas client', action: runSequences, label:'Générer les séquences', done: sequences.length > 0 },
+                { n:3, title:'Séquence IA', desc:'Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts, basés sur ton cas client', action: runSequences, label:'Générer la séquence', done: sequences.length > 0 },
               ].map(step => (
                 <div key={step.n} className="card" style={{ borderLeft:`3px solid ${step.done?'var(--mf-green)':busy?'var(--mf-blue)':'var(--border)'}` }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
