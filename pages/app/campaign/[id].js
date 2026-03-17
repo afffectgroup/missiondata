@@ -70,7 +70,12 @@ export default function CampaignPage() {
     const { data: s } = await supabase.auth.getSession();
     const r = await fetch(`/api/campaigns/${id}`, { headers:{ Authorization:`Bearer ${s.session?.access_token}` } });
     const d = await r.json();
-    if (d.campaign) { setCampaign(d.campaign); setProspects(d.prospects||[]); setSequences(d.sequences||[]); }
+    if (d.campaign) {
+      setCampaign(d.campaign);
+      setProspects(d.prospects||[]);
+      setSequences(d.sequences||[]);
+      if (d.campaign.mirror_criteria) setMirrorCriteria(d.campaign.mirror_criteria);
+    }
   }
 
   async function getToken() {
@@ -98,6 +103,13 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     setMirrorCriteria(d);
+    // Persist to DB so it survives page reload
+    const tk = await getToken();
+    await fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mirror_criteria: d }),
+    });
     addLog(`Critères générés : ${d.job_titles?.join(', ')}`, 'ok');
     addLog(`Secteurs directs : ${d.direct_sectors?.join(', ')}`, 'ok');
     addLog(`Secteurs indirects : ${d.indirect_sectors?.join(', ')}`, 'ok');
@@ -134,8 +146,8 @@ export default function CampaignPage() {
   // STEP 3: Generate sequences
   async function runSequences() {
     if (!prospects.length) { showToast('Génère d\'abord la base de prospects.'); return; }
-    setBusy(true); addLog('Génération des séquences IA…', 'inf');
-    addLog(`${prospects.length} séquences à générer — cela peut prendre 1–3 minutes…`);
+    setBusy(true); addLog('Génération de la séquence IA…', 'inf');
+    addLog('1 séquence commune pour tous les contacts — cela prend environ 15 secondes…');
     const token = await getToken();
     const r = await fetch('/api/sequences/generate', {
       method:'POST',
