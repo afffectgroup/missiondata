@@ -87,13 +87,8 @@ export default function CampaignPage() {
       setCampaign(d.campaign);
       setProspects(d.prospects||[]);
       setSequences(d.sequences||[]);
-      // selected_titles: null = first time, [] = cleared, [...] = saved choice
-      if (d.campaign.selected_titles !== null && d.campaign.selected_titles !== undefined) {
-        setSelectedTitles(d.campaign.selected_titles);
-      } else if (d.campaign.job_title_target) {
-        // First visit: only pre-select the chosen job title
-        setSelectedTitles([d.campaign.job_title_target]);
-      }
+      // Use DB value — empty array means user cleared all, null means never saved
+      setSelectedTitles(d.campaign.selected_titles || []);
     }
   }
 
@@ -288,7 +283,7 @@ export default function CampaignPage() {
                           <span><strong>Sélectionne au moins un poste</strong> en cliquant sur les chips ci-dessous — ou ajoute un poste personnalisé. La recherche ne démarre pas sans sélection.</span>
                         </div>
                       )}
-                      <JobTitleSelector selected={selectedTitles} onChange={(titles) => { setSelectedTitles(titles); saveTitles(titles); }} sector={campaign.client_sector} />
+                      <JobTitleSelector selected={selectedTitles} onChange={(titles) => { setSelectedTitles(titles); saveTitles(titles); }} sector={campaign.job_title_target} />
                     </div>
                   </div>
                 </div>
@@ -554,36 +549,24 @@ function SingleSequenceCard({ label, type, content: initialContent, seqId, field
   );
 }
 
-const JOB_TITLES_BY_SECTOR = {
-  default: [
-    'Directeur Général','PDG','CEO','Gérant','Directeur Associé',
-    'DAF','Directeur Administratif et Financier',
-    'DRH','Directeur des Ressources Humaines',
-    'DSI','Directeur des Systèmes d\'Information',
-    'Directeur Commercial','Directeur Marketing',
-    'Directeur des Opérations','COO',
-    'Fondateur','Co-fondateur',
-  ],
-  Accounting: ['Expert-comptable','Commissaire aux comptes','Chef comptable','DAF','Directeur administratif et financier','Responsable comptabilité','Contrôleur de gestion','Directeur financier'],
-  Insurance: ['Courtier en assurance','Agent général d\'assurance','Directeur agence assurance','Responsable sinistres','Chargé de clientèle assurance','Directeur régional assurance'],
-  'Real Estate': ['Agent immobilier','Directeur agence immobilière','Négociateur immobilier','Promoteur immobilier','Gestionnaire de biens','Directeur patrimoine'],
-  Construction: ['Chef de chantier','Conducteur de travaux','Directeur travaux','Maître d\'oeuvre','Architecte','Directeur BTP','Responsable technique'],
-  'Marketing and Advertising': ['Directeur artistique','Directeur agence communication','Chef de projet digital','Directeur marketing','Responsable communication','Head of Marketing'],
-  'Information Technology and Services': ['CTO','DSI','Directeur technique','Responsable IT','Chef de projet IT','Directeur digital','Head of Engineering'],
-  'Management Consulting': ['Associé cabinet conseil','Directeur conseil','Manager consulting','Partner','Senior Manager'],
-  'Financial Services': ['Directeur financier','DAF','Gérant patrimoine','Responsable gestion','Directeur agence bancaire','Conseiller en gestion de patrimoine'],
-  'Health, Wellness and Fitness': ['Directeur clinique','Responsable centre santé','Médecin directeur','Directeur EHPAD','Responsable établissement santé'],
-  'Professional Training & Coaching': ['Directeur organisme formation','Responsable formation','Directeur pédagogique','Gérant centre formation'],
-  'Restaurants': ['Restaurateur','Gérant restaurant','Directeur restauration','Chef cuisinier étoilé','Directeur groupe restauration'],
-  'Retail': ['Directeur magasin','Responsable point de vente','Directeur commercial','Gérant boutique','Directeur réseau'],
-  'Staffing and Recruiting': ['Directeur cabinet recrutement','Consultant recrutement senior','Responsable RH','DRH','Head of Talent'],
-  'Law Practice': ['Avocat associé','Directeur cabinet juridique','Managing Partner','Associé','Responsable juridique'],
-  'Legal Services': ['Directeur juridique','Responsable affaires juridiques','Juriste senior','General Counsel'],
+const JOB_TITLES_BY_DOMAIN = {
+  'Direction générale': ['Dirigeant','PDG','CEO','Directeur Général','Gérant','Associé','Co-fondateur','Président'],
+  'Direction financière': ['DAF','CFO','Directeur Administratif et Financier','Responsable financier','Expert-comptable','Chef comptable','Responsable contrôle de gestion'],
+  'Direction commerciale': ['Directeur Commercial','Responsable Commercial','Business Developer','Directeur des Ventes','Responsable grands comptes','Chef des ventes'],
+  'Direction marketing': ['Directeur Marketing','CMO','Responsable Marketing','Responsable Communication','Directeur de la communication','Responsable digital'],
+  'Direction RH': ['DRH','Directeur RH','Responsable RH','Responsable recrutement','HRBP','Responsable formation'],
+  'Direction technique': ['DSI','CTO','Directeur technique','Responsable IT','Responsable informatique','Directeur des systèmes d information'],
+  'Direction opérations': ['COO','Directeur des Opérations','Directeur de projet','Responsable achats','Directeur supply chain','Responsable logistique'],
+  'Métiers juridiques': ['Notaire','Avocat','Directeur juridique','Responsable affaires juridiques','Juriste senior'],
+  'Métiers de santé': ['Médecin','Directeur clinique','Directeur EHPAD','Responsable centre de santé','Pharmacien','Directeur médical'],
+  'Métiers immobilier': ['Agent immobilier','Directeur agence immobilière','Négociateur immobilier','Promoteur immobilier','Gestionnaire de biens'],
+  'Métiers de la restauration': ['Restaurateur','Gérant restaurant','Chef cuisinier','Directeur restauration'],
+  'Métiers artisanaux': ['Artisan','Chef d atelier','Maître artisan','Responsable production'],
 };
 
 function JobTitleSelector({ selected, onChange, sector }) {
   const [custom, setCustom] = useState('');
-  const titles = JOB_TITLES_BY_SECTOR[sector] || JOB_TITLES_BY_SECTOR.default;
+  const titles = JOB_TITLES_BY_DOMAIN[sector] || [];
 
   function toggle(t) {
     onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t]);
@@ -599,7 +582,7 @@ function JobTitleSelector({ selected, onChange, sector }) {
 
   return (
     <div>
-      <p style={{ fontSize:'12px', color:'var(--muted)', marginBottom:'8px' }}>Clique pour sélectionner ou désélectionner un poste. Tu peux aussi en ajouter un personnalisé.</p>
+      <p style={{ fontSize:'12px', color:'var(--muted)', marginBottom:'8px' }}>Sélectionne les postes à cibler parmi les suggestions ci-dessous, ou ajoute un poste personnalisé.</p>
       {/* Pre-defined chips */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'8px' }}>
         {titles.map(t => (
