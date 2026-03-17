@@ -343,8 +343,66 @@ function NewCampaignModal({ onClose, onCreated }) {
                 <label>Secteur d'activité *</label>
                 <SectorSearch value={form.client_sector} onChange={v => f('client_sector', v)} />
               </div>
+              <div className="field">
+                <label>Type de poste ciblé *</label>
+                <select className="input" value={form.job_title_target} onChange={e => f('job_title_target', e.target.value)}>
+                  <option value="">-- Choisir un type de poste --</option>
+                  <optgroup label="Direction générale">
+                    <option value="Dirigeant">Dirigeant / Chef d'entreprise</option>
+                    <option value="PDG">PDG / CEO</option>
+                    <option value="Directeur Général">Directeur Général</option>
+                    <option value="Gérant">Gérant</option>
+                    <option value="Associé">Associé / Co-fondateur</option>
+                  </optgroup>
+                  <optgroup label="Direction financière">
+                    <option value="DAF">DAF / Directeur Administratif et Financier</option>
+                    <option value="CFO">CFO</option>
+                    <option value="Responsable financier">Responsable financier</option>
+                    <option value="Expert-comptable">Expert-comptable</option>
+                    <option value="Chef comptable">Chef comptable</option>
+                  </optgroup>
+                  <optgroup label="Direction commerciale">
+                    <option value="Directeur commercial">Directeur Commercial</option>
+                    <option value="Responsable commercial">Responsable Commercial</option>
+                    <option value="Business Developer">Business Developer</option>
+                    <option value="Directeur des ventes">Directeur des Ventes</option>
+                  </optgroup>
+                  <optgroup label="Direction marketing">
+                    <option value="Directeur marketing">Directeur Marketing</option>
+                    <option value="Responsable marketing">Responsable Marketing</option>
+                    <option value="CMO">CMO</option>
+                    <option value="Responsable communication">Responsable Communication</option>
+                  </optgroup>
+                  <optgroup label="Direction RH">
+                    <option value="DRH">DRH / Directeur RH</option>
+                    <option value="Responsable RH">Responsable RH</option>
+                    <option value="Responsable recrutement">Responsable Recrutement</option>
+                  </optgroup>
+                  <optgroup label="Direction technique">
+                    <option value="DSI">DSI / Directeur SI</option>
+                    <option value="CTO">CTO</option>
+                    <option value="Responsable IT">Responsable IT</option>
+                    <option value="Directeur technique">Directeur Technique</option>
+                  </optgroup>
+                  <optgroup label="Direction opérations">
+                    <option value="COO">COO / Directeur des Opérations</option>
+                    <option value="Directeur de projet">Directeur de Projet</option>
+                    <option value="Responsable achats">Responsable Achats</option>
+                  </optgroup>
+                  <optgroup label="Métiers spécifiques">
+                    <option value="Notaire">Notaire</option>
+                    <option value="Avocat">Avocat</option>
+                    <option value="Médecin">Médecin / Praticien</option>
+                    <option value="Pharmacien">Pharmacien</option>
+                    <option value="Architecte">Architecte</option>
+                    <option value="Agent immobilier">Agent Immobilier</option>
+                    <option value="Courtier">Courtier</option>
+                    <option value="Restaurateur">Restaurateur</option>
+                    <option value="Artisan">Artisan / Chef d'atelier</option>
+                  </optgroup>
+                </select>
+              </div>
               <div className="field"><label>Localisation</label>{inp('client_location', { placeholder: 'Ex : Rennes, Paris, Lyon...' })}</div>
-              <div className="field"><label>Besoin identifié</label>{inp('client_need', { placeholder: 'Ex : Site web, Communication, Formation...' })}</div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
                 <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
                 <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target}>Suivant →</button>
