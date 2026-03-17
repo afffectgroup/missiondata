@@ -566,7 +566,7 @@ const JOB_TITLES_BY_DOMAIN = {
 
 function JobTitleSelector({ selected, onChange, sector }) {
   const [custom, setCustom] = useState('');
-  const titles = JOB_TITLES_BY_DOMAIN[sector] || [];
+  const titles = JOB_TITLES_BY_DOMAIN[sector] || Object.values(JOB_TITLES_BY_DOMAIN).flat();
 
   function toggle(t) {
     onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t]);
