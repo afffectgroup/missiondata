@@ -267,7 +267,7 @@ export default function CampaignPage() {
               {[
                 { n:1, title:'Mirroring IA', desc:'L\'IA analyse le profil client et génère les critères de ciblage (concurrents directs + indirects)', action: runMirror, label:'Lancer le mirroring', done: !!mirrorCriteria },
                 { n:2, title:'Recherche Icypeas', desc:'Génère la base de 50 prospects LinkedIn selon les critères du mirroring', action: runSearch, label:'Lancer la recherche', done: prospects.length > 0 },
-                { n:3, title:'Séquences IA', desc:'Génère 3 emails + 2 LinkedIn individualisés par prospect, basés sur ton cas client', action: runSequences, label:'Générer les séquences', done: sequences.length > 0 },
+                { n:3, title:'Séquences IA', desc:'Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts, basés sur ton cas client', action: runSequences, label:'Générer les séquences', done: sequences.length > 0 },
               ].map(step => (
                 <div key={step.n} className="card" style={{ borderLeft:`3px solid ${step.done?'var(--mf-green)':busy?'var(--mf-blue)':'var(--border)'}` }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
@@ -372,7 +372,14 @@ export default function CampaignPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...prospects].sort((a,b) => (b.email?1:0) - (a.email?1:0)).map((p,i) => (
+                    {[...prospects].sort((a,b) => {
+                const score = p => {
+                  if (p.email) return 0;
+                  if (p.email_cert === 'not_found') return 1;
+                  return 2;
+                };
+                return score(a) - score(b);
+              }).map((p,i) => (
                       <tr key={p.id} style={{ borderBottom:'1px solid rgba(226,230,243,.5)', background: selected.includes(p.id) ? 'var(--mf-blue-lt)' : 'white' }}>
                         <td style={{ padding:'9px 12px' }}>
                           <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleSelect(p.id)} style={{ cursor:'pointer', width:'14px', height:'14px' }} />
