@@ -2,10 +2,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --mf-blue: #1a56f0;
-  --mf-blue-lt: #eff3ff;
-  --mf-green: #00c48c;
-  --mf-green-lt: #e6faf5;
+  --mf-blue: #1FC95A;
+  --mf-blue-lt: #edfbf2;
+  --mf-green: #0F632D;
+  --mf-green-lt: #edfbf2;
   --bg: #f4f5f7;
   --white: #ffffff;
   --surface: #f9fafb;
@@ -30,8 +30,8 @@ input, select, textarea { font-family: inherit; }
 
 /* Buttons */
 .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; border: none; padding: 9px 16px; }
-.btn-primary { background: var(--mf-blue); color: white; }
-.btn-primary:hover:not(:disabled) { background: #1648d4; }
+.btn-primary { background: linear-gradient(160deg, #1FC95A 0%, #0F632D 100%); color: white; }
+.btn-primary:hover:not(:disabled) { background: linear-gradient(160deg, #18b34f 0%, #0a5226 100%); }
 .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 .btn-ghost { background: var(--white); border: 1px solid var(--border); color: var(--text2); }
 .btn-ghost:hover { border-color: #d1d5db; background: var(--surface); }

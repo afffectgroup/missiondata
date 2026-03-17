@@ -359,7 +359,7 @@ export default function CampaignPage() {
               </div>
             )}
             {selected.length > 0 && (
-              <div style={{ background:'var(--mf-blue-lt)', border:'1px solid rgba(26,86,240,.2)', borderRadius:'var(--r)', padding:'10px 14px', marginBottom:'12px', fontSize:'12px', color:'var(--mf-blue)', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ background:'var(--mf-blue-lt)', border:'1px solid rgba(31,201,90,.2)', borderRadius:'var(--r)', padding:'10px 14px', marginBottom:'12px', fontSize:'12px', color:'var(--mf-blue)', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <span>{selected.length === prospects.length ? 'Tous les prospects sélectionnés' : selected.length + ' prospect(s) sélectionné(s)'}</span>
                 <button onClick={() => setSelected([])} style={{ background:'none', border:'none', color:'var(--mf-blue)', cursor:'pointer', fontSize:'12px', textDecoration:'underline', fontFamily:'Figtree,sans-serif' }}>Tout désélectionner</button>
               </div>
