@@ -244,7 +244,7 @@ export default function CampaignPage() {
               <div className="card">
                 <div className="card-title">Cas client & résultats</div>
                 {campaign.freelance_result && <div style={{ fontSize:'13px', marginBottom:'10px' }}>{campaign.freelance_result}</div>}
-                {campaign.freelance_kpi && <div style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', borderRadius:'8px', padding:'8px 12px', fontSize:'13px', fontWeight:'600', marginBottom:'8px' }}>{campaign.freelance_kpi}</div>}
+                {campaign.freelance_kpi && <div style={{ background:'var(--mf-blue-lt)', color:'var(--mf-blue)', borderRadius:'8px', padding:'8px 12px', fontSize:'13px', fontWeight:'600', marginBottom:'8px' }}>{campaign.freelance_kpi}</div>}
                 {campaign.freelance_angle && <div style={{ fontSize:'12px', color:'var(--muted)' }}>{campaign.freelance_angle}</div>}
               </div>
             </div>
@@ -254,7 +254,7 @@ export default function CampaignPage() {
                 <div style={{ fontSize:'12px', color:'var(--muted)' }}>Prospects</div>
               </div>
               <div className="card" style={{ flex:1, textAlign:'center' }}>
-                <div style={{ fontSize:'28px', fontWeight:'800', color:'var(--mf-green)' }}>{sequences.length}</div>
+                <div style={{ fontSize:'28px', fontWeight:'800', color:'var(--mf-blue)' }}>{sequences.length}</div>
                 <div style={{ fontSize:'12px', color:'var(--muted)' }}>Séquences</div>
               </div>
             </div>
@@ -273,10 +273,10 @@ export default function CampaignPage() {
             <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'20px' }}>
 
               {/* STEP 1: Select job titles */}
-              <div className="card" style={{ borderLeft:`3px solid ${selectedTitles.length ? 'var(--mf-green)' : 'var(--mf-blue)'}` }}>
+              <div className="card" style={{ borderLeft:`3px solid ${selectedTitles.length ? 'var(--mf-blue)' : 'var(--mf-blue)'}` }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px', flex:1 }}>
-                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: selectedTitles.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: selectedTitles.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{selectedTitles.length ? '✓' : '1'}</div>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: selectedTitles.length ? 'var(--mf-blue-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: selectedTitles.length ? 'var(--mf-blue)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{selectedTitles.length ? '✓' : '1'}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'4px' }}>Postes ciblés</div>
                       {selectedTitles.length === 0 && (
@@ -292,10 +292,10 @@ export default function CampaignPage() {
               </div>
 
               {/* STEP 2: Search */}
-              <div className="card" style={{ borderLeft:`3px solid ${prospects.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+              <div className="card" style={{ borderLeft:`3px solid ${prospects.length ? 'var(--mf-blue)' : 'var(--border)'}` }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: prospects.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: prospects.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{prospects.length ? '✓' : '2'}</div>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: prospects.length ? 'var(--mf-blue-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: prospects.length ? 'var(--mf-blue)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{prospects.length ? '✓' : '2'}</div>
                     <div>
                       <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'6px' }}>Recherche Icypeas</div>
                       <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
@@ -305,9 +305,9 @@ export default function CampaignPage() {
                           return (
                             <button key={n} onClick={() => setSearchLimit(n)}
                               style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'12px', fontWeight: active ? '700' : '500', cursor:'pointer', border:'1.5px solid',
-                                borderColor: active ? 'var(--mf-green)' : 'var(--border)',
-                                background: active ? 'var(--mf-green-lt)' : 'white',
-                                color: active ? 'var(--mf-green)' : 'var(--text2)',
+                                borderColor: active ? 'var(--mf-blue)' : 'var(--border)',
+                                background: active ? 'var(--mf-blue-lt)' : 'white',
+                                color: active ? 'var(--mf-blue)' : 'var(--text2)',
                               }}>{n}</button>
                           );
                         })}
@@ -322,10 +322,10 @@ export default function CampaignPage() {
               </div>
 
               {/* STEP 3: Sequence */}
-              <div className="card" style={{ borderLeft:`3px solid ${sequences.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+              <div className="card" style={{ borderLeft:`3px solid ${sequences.length ? 'var(--mf-blue)' : 'var(--border)'}` }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: sequences.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: sequences.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{sequences.length ? '✓' : '3'}</div>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: sequences.length ? 'var(--mf-blue-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: sequences.length ? 'var(--mf-blue)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{sequences.length ? '✓' : '3'}</div>
                     <div>
                       <div style={{ fontSize:'14px', fontWeight:'600' }}>Séquence IA</div>
                       <div style={{ fontSize:'12px', color:'var(--muted)' }}>Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts</div>
@@ -345,7 +345,7 @@ export default function CampaignPage() {
                 <div className="card-title">📋 Journal</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:'4px', maxHeight:'200px', overflowY:'auto' }}>
                   {log.map((l,i) => (
-                    <div key={i} style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'11px', color:l.type==='ok'?'var(--mf-green)':l.type==='err'?'var(--red)':l.type==='inf'?'var(--mf-blue)':'var(--muted)', display:'flex', gap:'10px' }}>
+                    <div key={i} style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'11px', color:l.type==='ok'?'var(--mf-blue)':l.type==='err'?'var(--red)':l.type==='inf'?'var(--mf-blue)':'var(--muted)', display:'flex', gap:'10px' }}>
                       <span style={{ opacity:.5, flexShrink:0 }}>{l.ts}</span><span>{l.msg}</span>
                     </div>
                   ))}
@@ -428,13 +428,13 @@ export default function CampaignPage() {
                         <td style={{ padding:'9px 12px', maxWidth:'130px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.company||'—'}</td>
                         <td style={{ padding:'9px 12px', fontFamily:'JetBrains Mono,monospace', fontSize:'11px' }}>
                           {p.email
-                            ? <span style={{ color:'var(--mf-green)', fontWeight:'600' }}>{p.email}</span>
+                            ? <span style={{ color:'var(--mf-blue)', fontWeight:'600' }}>{p.email}</span>
                             : <span style={{ color:'var(--muted)' }}>—</span>
                           }
                         </td>
                         <td style={{ padding:'9px 12px' }}>
                           {p.email_cert
-                            ? <span style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', padding:'2px 7px', borderRadius:'4px', fontSize:'10px', fontWeight:'600' }}>{p.email_cert}</span>
+                            ? <span style={{ background:'var(--mf-blue-lt)', color:'var(--mf-blue)', padding:'2px 7px', borderRadius:'4px', fontSize:'10px', fontWeight:'600' }}>{p.email_cert}</span>
                             : '—'
                           }
                         </td>
@@ -593,9 +593,9 @@ function JobTitleSelector({ selected, onChange, sector }) {
         {titles.map(t => (
           <button key={t} onClick={() => toggle(t)}
             style={{ padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', cursor:'pointer', border:'1.5px solid', transition:'all .15s',
-              borderColor: selected.includes(t) ? 'var(--mf-green)' : 'var(--border)',
-              background: selected.includes(t) ? 'var(--mf-green-lt)' : 'white',
-              color: selected.includes(t) ? 'var(--mf-green)' : 'var(--text2)',
+              borderColor: selected.includes(t) ? 'var(--mf-blue)' : 'var(--border)',
+              background: selected.includes(t) ? 'var(--mf-blue-lt)' : 'white',
+              color: selected.includes(t) ? 'var(--mf-blue)' : 'var(--text2)',
             }}>
             {t}
           </button>

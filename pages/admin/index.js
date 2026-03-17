@@ -170,7 +170,7 @@ export default function AdminPage() {
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'12px', marginBottom:'24px' }}>
                   {[
                     { n: stats.active_freelances, label:'Freelances actifs', sub:`/${stats.total_freelances} total`, color:'var(--mf-blue)' },
-                    { n: stats.completed_campaigns, label:'Campagnes terminées', sub:`/${stats.total_campaigns} total`, color:'var(--mf-green)' },
+                    { n: stats.completed_campaigns, label:'Campagnes terminées', sub:`/${stats.total_campaigns} total`, color:'var(--mf-blue)' },
                     { n: stats.total_prospects, label:'Prospects générés', sub:`${stats.total_sequences} séquences`, color:'var(--mf-orange)' },
                   ].map((s,i) => (
                     <div key={i} className="card" style={{ textAlign:'center' }}>
@@ -300,7 +300,7 @@ export default function AdminPage() {
                       <td style={{ padding:'12px 16px' }}>
                         <div style={{ display:'flex', gap:'6px' }}>
                           <button className="btn btn-ghost btn-sm" onClick={() => setModal(u)}>✏️ Éditer</button>
-                          <button className="btn btn-sm" style={{ background:u.is_active?'var(--red-lt)':'var(--mf-green-lt)', color:u.is_active?'var(--red)':'var(--mf-green)', border:'none' }} onClick={() => toggleUser(u)}>
+                          <button className="btn btn-sm" style={{ background:u.is_active?'var(--red-lt)':'var(--mf-blue-lt)', color:u.is_active?'var(--red)':'var(--mf-blue)', border:'none' }} onClick={() => toggleUser(u)}>
                             {u.is_active?'Désactiver':'Activer'}
                           </button>
                           <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u)}>🗑</button>

@@ -175,14 +175,14 @@ export default function AppPage() {
             style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '9px 10px', borderRadius: 'var(--r)', background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', textAlign: 'left' }}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
             Mes dossiers
-            <span style={{ marginLeft: 'auto', background: 'linear-gradient(135deg, #1FC95A, #0F632D)', color: 'white', borderRadius: '20px', padding: '1px 7px', fontSize: '11px' }}>{campaigns.length}</span>
+            <span style={{ marginLeft: 'auto', background: 'linear-gradient(135deg, #0090FF, #0070CC)', color: 'white', borderRadius: '20px', padding: '1px 7px', fontSize: '11px' }}>{campaigns.length}</span>
           </button>
         </nav>
 
         {/* User */}
         <div style={{ padding: '12px 8px', borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: 'var(--r)', marginBottom: '4px' }}>
-            <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #1FC95A, #0F632D)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: '700', color: 'white', flexShrink: 0 }}>
+            <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #0090FF, #0070CC)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: '700', color: 'white', flexShrink: 0 }}>
               {name[0].toUpperCase()}
             </div>
             <div style={{ overflow: 'hidden', flex: 1 }}>

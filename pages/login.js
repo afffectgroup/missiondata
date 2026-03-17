@@ -68,7 +68,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              style={{ width: '100%', padding: '12px', background: loading ? '#7ee0a0' : 'var(--mf-blue)', color: 'white', border: 'none', borderRadius: '99px', fontSize: '14px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'background .15s', fontFamily: 'inherit' }}>
+              style={{ width: '100%', padding: '12px', background: loading ? '#66BBFF' : 'var(--mf-blue)', color: 'white', border: 'none', borderRadius: '99px', fontSize: '14px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'background .15s', fontFamily: 'inherit' }}>
               {loading ? <div className="spinner" /> : null}
               {loading ? 'Connexion…' : 'Se connecter'}
             </button>
