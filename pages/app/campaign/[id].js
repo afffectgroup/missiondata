@@ -506,7 +506,7 @@ export default function CampaignPage() {
         )}
       </main>
 
-      {toast && <div style={{ position:'fixed', bottom:'24px', right:'24px', background:'var(--mf-dark)', color:'white', padding:'12px 20px', borderRadius:'var(--r)', fontSize:'13px', fontWeight:'600', boxShadow:'var(--shadow-lg)', animation:'fadeUp .3s ease', zIndex:1000 }}>{toast}</div>}
+      {toast && <div style={{ position:'fixed', bottom:'24px', right:'24px', background:'#0090FF', color:'white', padding:'12px 20px', borderRadius:'var(--r)', fontSize:'13px', fontWeight:'600', boxShadow:'var(--shadow-lg)', animation:'fadeUp .3s ease', zIndex:1000 }}>{toast}</div>}
     </div>
   );
 }
