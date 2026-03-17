@@ -52,7 +52,7 @@ export default function CampaignPage() {
     });
     const d1 = await r1.json();
     if (d1.error) { showToast('Erreur : ' + d1.error); setEnriching(false); return; }
-    showToast(d1.submitted + ' recherche(s) lancee(s). Attends 20-30s puis clique sur "Recuperer les emails".');
+    showToast(d1.submitted + ' recherche' + (d1.submitted > 1 ? 's' : '') + ' lancée' + (d1.submitted > 1 ? 's' : '') + ' — attends 20-30s puis clique sur Récupérer les emails');
     setSelected([]);
     await load();
     setEnriching(false);
@@ -71,7 +71,7 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     if (d.error) { showToast('Erreur : ' + d.error); setEnriching(false); return; }
-    showToast(d.enriched + ' email(s) recupere(s) !' + (d.pending > 0 ? ' ' + d.pending + ' encore en attente.' : ''));
+    if (d.enriched > 0) { showToast(d.enriched + ' email' + (d.enriched > 1 ? 's' : '') + ' trouvé' + (d.enriched > 1 ? 's' : '') + (d.pending > 0 ? ' · ' + d.pending + ' encore en attente' : '') + ' !'); } else if (d.pending > 0) { showToast(d.pending + ' recherche' + (d.pending > 1 ? 's' : '') + ' encore en cours — réessaie dans quelques secondes'); } else { showToast('Aucun email trouvé pour cette sélection.'); }
     await load();
     setEnriching(false);
   }
@@ -98,7 +98,7 @@ export default function CampaignPage() {
   }
 
   function addLog(msg, type='') { setLog(p => [...p, { msg, type, ts: new Date().toLocaleTimeString() }]); }
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
+  function showToast(msg, duration=4500) { setToast(msg); setTimeout(() => setToast(''), duration); }
 
   async function saveTitles(titles) {
     const token = await getToken();
@@ -127,8 +127,9 @@ export default function CampaignPage() {
       body: JSON.stringify({ campaign_id: id, query, limit: searchLimit || campaign.prospect_limit || 10 }),
     });
     const d = await r.json();
-    if (d.error) { addLog('Erreur : ' + d.error, 'err'); setBusy(false); return; }
+    if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur Icypeas : ' + d.error); setBusy(false); return; }
     addLog(`${d.saved} prospects sauvegardés (${d.total} disponibles)`, 'ok');
+    showToast(d.saved > 0 ? d.saved + ' prospect' + (d.saved > 1 ? 's' : '') + ' trouvé' + (d.saved > 1 ? 's' : '') + ' !' : 'Aucun prospect trouvé.');
     await load();
     setBusy(false);
   }
@@ -147,6 +148,7 @@ export default function CampaignPage() {
     const d = await r.json();
     if (d.error) { addLog('❌ Erreur : ' + d.error, 'err'); setBusy(false); return; }
     addLog(`${d.generated} séquence générée !`, 'ok');
+    showToast('Séquence générée avec succès !');
     await load();
     setTab('sequences');
     setBusy(false);

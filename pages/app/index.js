@@ -267,7 +267,7 @@ export default function AppPage() {
         )}
       </main>
 
-      {showNew && <NewCampaignModal onClose={() => setShowNew(false)} onCreated={id => { setShowNew(false); router.push(`/app/campaign/${id}`); }} />}
+      {showNew && <NewCampaignModal onClose={() => setShowNew(false)} onCreated={id => { setShowNew(false); showToast('Dossier créé !'); router.push(`/app/campaign/${id}`); }} />}
       {toast && <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: 'var(--text)', color: 'white', padding: '10px 16px', borderRadius: 'var(--r)', fontSize: '13px', fontWeight: '500', boxShadow: 'var(--shadow)', zIndex: 1000 }}>{toast}</div>}
     </div>
   );
