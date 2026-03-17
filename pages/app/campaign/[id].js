@@ -187,7 +187,7 @@ export default function CampaignPage() {
     { id:'overview',  label:'Aperçu',                  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg> },
     { id:'search',    label:'Recherche',                icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg> },
     { id:'prospects', label:`Prospects (${prospects.length})`, icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg> },
-    { id:'sequences', label:`Séquences (${sequences.length})`,  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg> },
+    { id:'sequences', label:'Séquence',  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg> },
   ];
 
   return (
@@ -426,36 +426,47 @@ export default function CampaignPage() {
           </div>
         )}
 
-        {/* SEQUENCES */}
+        {/* SEQUENCE */}
         {tab==='sequences' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px' }}>
-              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>Séquences</h2>
-              <div style={{ display:'flex', gap:'6px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
+              <div>
+                <h2 style={{ fontSize:'16px', fontWeight:'700' }}>Séquence de prospection</h2>
+                <p style={{ fontSize:'12px', color:'var(--muted)', marginTop:'2px' }}>1 séquence commune — utilisez [Prénom] et [Entreprise] comme variables</p>
               </div>
+              <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
             </div>
-            {!sequences.length ? (
-              <div style={{ textAlign:'center', padding:'40px', color:'var(--muted)' }}>
-                <div style={{ width:'40px', height:'40px', background:'var(--surface)', borderRadius:'10px', display:'grid', placeItems:'center', margin:'0 auto 12px' }}><svg width="20" height="20" viewBox="0 0 20 20" fill="var(--muted)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg></div>
-                <div style={{ fontWeight:'700', marginBottom:'6px' }}>Aucune séquence</div>
-                <button className="btn btn-primary btn-sm" onClick={() => setTab('search')}>Générer les séquences →</button>
+            {!sequences.length || !sequences[0]?.email_1 ? (
+              <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', color:'var(--muted)' }}>
+                <div style={{ width:'40px', height:'40px', background:'var(--surface)', borderRadius:'10px', display:'grid', placeItems:'center', margin:'0 auto 12px' }}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--muted)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
+                </div>
+                <div style={{ fontWeight:'600', marginBottom:'6px' }}>Aucune séquence générée</div>
+                <p style={{ fontSize:'13px', marginBottom:'16px' }}>Va dans l'onglet Recherche et clique sur "Générer les séquences"</p>
+                <button className="btn btn-primary btn-sm" onClick={() => setTab('search')}>Générer la séquence →</button>
               </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                {sequences.map(seq => {
-                  const prospect = prospects.find(p => p.id === seq.prospect_id);
-                  return (
-                    <SequenceCard key={seq.id} seq={seq} prospect={prospect} onSave={async (updates) => {
+            ) : (() => {
+              const seq = sequences[0];
+              const messages = [
+                { key:'email_1', label:'Email 1 — Accroche', type:'email' },
+                { key:'email_2', label:'Email 2 — Preuve & KPI', type:'email' },
+                { key:'email_3', label:'Email 3 — Relance', type:'email' },
+                { key:'linkedin_1', label:'LinkedIn 1 — Connexion', type:'linkedin' },
+                { key:'linkedin_2', label:'LinkedIn 2 — Suivi', type:'linkedin' },
+              ];
+              return (
+                <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                  {messages.map(({ key, label, type }) => (
+                    <SingleSequenceCard key={key} label={label} type={type} content={seq[key]||''} seqId={seq.id} fieldKey={key} onSave={async (val) => {
                       const token = await getToken();
-                      await fetch(`/api/sequences/${seq.id}`, { method:'PATCH', headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' }, body:JSON.stringify({ ...updates, edited:true }) });
-                      showToast('Séquence sauvegardée ✓');
+                      await fetch(`/api/sequences/${seq.id}`, { method:'PATCH', headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' }, body:JSON.stringify({ [key]: val }) });
+                      showToast('Sauvegardé ✓');
                       await load();
                     }} />
-                  );
-                })}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
       </main>
@@ -465,57 +476,42 @@ export default function CampaignPage() {
   );
 }
 
-function SequenceCard({ seq, prospect, onSave }) {
-  const [open, setOpen] = useState(false);
+
+function SingleSequenceCard({ label, type, content: initialContent, seqId, fieldKey, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ email_1:seq.email_1||'', email_2:seq.email_2||'', email_3:seq.email_3||'', linkedin_1:seq.linkedin_1||'', linkedin_2:seq.linkedin_2||'' });
-  const f = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [val, setVal] = useState(initialContent);
+  const isEmail = type === 'email';
 
   return (
-    <div className="card" style={{ padding:0, overflow:'hidden' }}>
-      <div style={{ padding:'14px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }} onClick={() => setOpen(!open)}>
-        <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-          <div style={{ width:'34px', height:'34px', background:'var(--mf-blue-lt)', borderRadius:'8px', display:'grid', placeItems:'center', fontSize:'15px', fontWeight:'800', color:'var(--mf-blue)', flexShrink:0 }}>{prospect?.fullname?.[0]?.toUpperCase()||'?'}</div>
-          <div>
-            <div style={{ fontSize:'13px', fontWeight:'700' }}>{prospect?.fullname||'Prospect'}</div>
-            <div style={{ fontSize:'11px', color:'var(--muted)' }}>{prospect?.job_title||''} {prospect?.company?`· ${prospect.company}`:''}</div>
+    <div className="card" style={{ padding: 0, overflow:'hidden' }}>
+      <div style={{ padding:'12px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom: editing ? '1px solid var(--border)' : 'none' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+          <div style={{ width:'32px', height:'32px', borderRadius:'8px', display:'grid', placeItems:'center', background: isEmail ? 'var(--mf-blue-lt)' : '#f0ebff', flexShrink:0 }}>
+            {isEmail
+              ? <svg width="15" height="15" viewBox="0 0 20 20" fill="var(--mf-blue)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="#7c3aed"><path d="M16 8c0-2.21-1.79-4-4-4S8 5.79 8 8s1.79 4 4 4 4-1.79 4-4zm-10 9c0-2 4-3.1 6-3.1s6 1.1 6 3.1v1H6v-1z"/></svg>
+            }
           </div>
+          <span style={{ fontSize:'13px', fontWeight:'600' }}>{label}</span>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          {seq.edited && <span style={{ fontSize:'10px', background:'var(--mf-orange-lt)', color:'var(--mf-orange)', padding:'2px 7px', borderRadius:'4px', fontWeight:'600' }}>Édité</span>}
-          <span style={{ color:'var(--muted)', fontSize:'16px', transform:open?'rotate(180deg)':'none', transition:'.2s' }}>▾</span>
-        </div>
-      </div>
-
-      {open && (
-        <div style={{ borderTop:'1px solid var(--border)', padding:'18px' }}>
+        <div style={{ display:'flex', gap:'6px' }}>
           {editing ? (
             <>
-              {[['email_1','Email 1 — Accroche',true],['email_2','Email 2 — Cas client',true],['email_3','Email 3 — Relance',true],['linkedin_1','LinkedIn 1 — Connexion',false],['linkedin_2','LinkedIn 2 — Suivi',true]].map(([k,label,multi]) => (
-                <div className="field" key={k}>
-                  <label>{label}</label>
-                  {multi ? <textarea className="input" value={form[k]} onChange={e=>f(k,e.target.value)} rows={4} /> : <input className="input" value={form[k]} onChange={e=>f(k,e.target.value)} />}
-                </div>
-              ))}
-              <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(false)}>Annuler</button>
-                <button className="btn btn-primary btn-sm" onClick={()=>{onSave(form);setEditing(false);}}>💾 Sauvegarder</button>
-              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setVal(initialContent); setEditing(false); }}>Annuler</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { onSave(val); setEditing(false); }}>Sauvegarder</button>
             </>
           ) : (
-            <>
-              {[['email_1','Email 1'],['email_2','Email 2'],['email_3','Email 3'],['linkedin_1','LinkedIn 1'],['linkedin_2','LinkedIn 2']].map(([k,label]) => seq[k] && (
-                <div key={k} style={{ marginBottom:'12px' }}>
-                  <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--muted)', marginBottom:'5px', textTransform:'uppercase', letterSpacing:'.8px' }}>{label}</div>
-                  <div style={{ background:'var(--surface)', borderRadius:'8px', padding:'12px 14px', fontSize:'12px', color:'var(--text)', lineHeight:'1.65', whiteSpace:'pre-wrap', border:'1px solid var(--border)' }}>{seq[k]}</div>
-                </div>
-              ))}
-              <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(true)}>✏️ Éditer les messages</button>
-            </>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Modifier</button>
           )}
         </div>
-      )}
+      </div>
+      <div style={{ padding:'16px 18px' }}>
+        {editing ? (
+          <textarea className="input" value={val} onChange={e => setVal(e.target.value)} rows={isEmail ? 8 : 4} style={{ fontFamily:'monospace', fontSize:'12px', lineHeight:'1.6' }} />
+        ) : (
+          <pre style={{ fontFamily:'inherit', fontSize:'13px', lineHeight:'1.7', whiteSpace:'pre-wrap', color:'var(--text2)', margin:0 }}>{val || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>Aucun contenu</span>}</pre>
+        )}
+      </div>
     </div>
   );
 }
-// Tue Mar 17 10:18:19 UTC 2026
