@@ -9,6 +9,8 @@ export default function AdminPage() {
   const { profile, loading, signOut } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState('stats');
+  const [campaigns, setCampaigns] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [modal, setModal] = useState(null); // null | 'create' | {user}
@@ -21,6 +23,7 @@ export default function AdminPage() {
   }, [loading, profile]);
 
   useEffect(() => { if (profile?.role === 'admin') { fetchStats(); fetchUsers(); } }, [profile]);
+  useEffect(() => { if (tab === 'campaigns') fetchCampaigns(selectedUser); }, [tab, selectedUser]);
 
   async function authHeader() {
     const { data } = await supabase.auth.getSession();
@@ -39,6 +42,30 @@ export default function AdminPage() {
     const r = await fetch('/api/admin/users', { headers: h });
     const d = await r.json();
     setUsers(d.users || []);
+  }
+
+  async function fetchCampaigns(userId = null) {
+    const h = await authHeader();
+    const url = userId ? `/api/admin/campaigns?user_id=${userId}` : '/api/admin/campaigns';
+    const r = await fetch(url, { headers: h });
+    const d = await r.json();
+    setCampaigns(d.campaigns || []);
+  }
+
+  async function downloadProspects(campaignId, campaignName) {
+    const h = await authHeader();
+    const r = await fetch(`/api/admin/campaigns?prospects=1&campaign_id=${campaignId}`, { headers: h });
+    const d = await r.json();
+    const prospects = d.prospects || [];
+    if (!prospects.length) { showToast('Aucun prospect pour ce dossier.'); return; }
+    const rows = prospects.map(p => [p.fullname,p.job_title,p.company,p.sector,p.email,p.email_cert,p.location,p.linkedin_url]
+      .map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','));
+    const csv = '\uFEFF' + ['Nom,Poste,Entreprise,Secteur,Email,Score,Localisation,LinkedIn', ...rows].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `${campaignName.replace(/[^a-z0-9]/gi,'_')}_prospects.csv`;
+    a.click();
+    showToast('CSV téléchargé ✓');
   }
 
   async function createUser() {
@@ -101,6 +128,7 @@ export default function AdminPage() {
           {[
             { id:'stats', label:'Tableau de bord', icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg> },
             { id:'users', label:'Freelances', icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg> },
+          { id:'campaigns', label:'Bases prospects', icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg> },
           ].map(item => (
             <button key={item.id} onClick={() => setTab(item.id)}
               style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'var(--r)', cursor:'pointer', fontSize:'13px', fontWeight: tab===item.id ? '600' : '500', border:'none', textAlign:'left', width:'100%', background: tab===item.id ? 'var(--mf-blue-lt)' : 'none', color: tab===item.id ? 'var(--mf-blue)' : 'var(--text2)', transition:'all .15s' }}
@@ -186,6 +214,57 @@ export default function AdminPage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* CAMPAIGNS TAB */}
+        {tab === 'campaigns' && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'10px' }}>
+              <div>
+                <h1 style={{ fontSize:'20px', fontWeight:'700', marginBottom:'2px' }}>Bases prospects</h1>
+                <p style={{ fontSize:'13px', color:'var(--muted)' }}>Voir et télécharger les prospects générés par les freelances</p>
+              </div>
+              <select className="input" style={{ width:'auto', minWidth:'200px' }} value={selectedUser||''} onChange={e => setSelectedUser(e.target.value||null)}>
+                <option value="">Tous les freelances</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+              </select>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 140px 90px 90px 140px', gap:'12px', padding:'8px 16px', fontSize:'11px', fontWeight:'600', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.5px' }}>
+                <span>Dossier</span><span>Freelance</span><span>Prospects</span><span>Statut</span><span>Actions</span>
+              </div>
+              {campaigns.length === 0 && (
+                <div className="card" style={{ textAlign:'center', color:'var(--muted)', padding:'40px' }}>Aucun dossier trouvé.</div>
+              )}
+              {campaigns.map(c => (
+                <div key={c.id} style={{ display:'grid', gridTemplateColumns:'1fr 140px 90px 90px 140px', gap:'12px', padding:'14px 16px', background:'white', border:'1px solid var(--border)', borderRadius:'var(--r)', alignItems:'center' }}>
+                  <div>
+                    <div style={{ fontSize:'13px', fontWeight:'600' }}>{c.name}</div>
+                    <div style={{ fontSize:'12px', color:'var(--muted)' }}>{c.client_sector}{c.client_location ? ` · ${c.client_location}` : ''}</div>
+                  </div>
+                  <div style={{ fontSize:'12px', color:'var(--text2)' }}>{c.profiles?.full_name || c.profiles?.email || '—'}</div>
+                  <div>
+                    {c.prospects_count > 0
+                      ? <span className="badge badge-blue">{c.prospects_count}</span>
+                      : <span style={{ fontSize:'12px', color:'var(--muted)' }}>—</span>}
+                  </div>
+                  <div>
+                    <span className={`badge badge-${c.status==='done'?'green':c.status==='generating'?'blue':'muted'}`} style={{ fontSize:'11px' }}>
+                      {c.status==='done'?'Terminé':c.status==='generating'?'En cours':'Brouillon'}
+                    </span>
+                  </div>
+                  <div>
+                    {c.prospects_count > 0 && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => downloadProspects(c.id, c.name)}>
+                        <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                        CSV
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
