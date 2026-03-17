@@ -84,41 +84,46 @@ export default function AdminPage() {
     <div style={{ display:'flex', minHeight:'100vh' }}>
 
       {/* SIDEBAR */}
-      <aside style={{ width:'220px', background:'var(--mf-dark)', display:'flex', flexDirection:'column', flexShrink:0 }}>
-        <div style={{ padding:'20px 18px 14px', borderBottom:'1px solid rgba(255,255,255,.08)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'9px', marginBottom:'10px' }}>
-            <div style={{ width:'30px', height:'30px', background:'var(--mf-blue)', borderRadius:'7px', display:'grid', placeItems:'center' }}>
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white" opacity=".92"/></svg>
+      <aside style={{ width:'240px', background:'white', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0, position:'sticky', top:0, height:'100vh' }}>
+        <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+            <div style={{ width:'34px', height:'34px', background:'var(--mf-blue)', borderRadius:'8px', display:'grid', placeItems:'center', flexShrink:0 }}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white"/></svg>
             </div>
             <div>
-              <div style={{ fontSize:'13px', fontWeight:'800', color:'white' }}>Mission<span style={{ color:'#7eb3ff' }}>Freelances</span></div>
-              <div style={{ fontSize:'10px', color:'rgba(255,255,255,.4)' }}>Admin</div>
+              <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--text)' }}>MissionData</div>
+              <div style={{ fontSize:'11px', color:'var(--muted)' }}>Espace Admin</div>
             </div>
           </div>
-          <div style={{ background:'rgba(255,71,87,.2)', border:'1px solid rgba(255,71,87,.3)', borderRadius:'6px', padding:'3px 9px', fontSize:'11px', fontWeight:'700', color:'#ff8a95', display:'inline-block' }}>🔐 Espace Admin</div>
         </div>
 
-        <nav style={{ flex:1, padding:'14px 10px', display:'flex', flexDirection:'column', gap:'2px' }}>
+        <nav style={{ flex:1, padding:'12px 8px', display:'flex', flexDirection:'column', gap:'2px' }}>
+          <div style={{ fontSize:'11px', fontWeight:'600', color:'var(--muted)', padding:'8px 8px 4px', letterSpacing:'0.5px', textTransform:'uppercase' }}>Administration</div>
           {[
-            { id:'stats', icon:'📊', label:'Tableau de bord' },
-            { id:'users', icon:'👥', label:'Freelances' },
+            { id:'stats', label:'Tableau de bord', icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg> },
+            { id:'users', label:'Freelances', icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg> },
           ].map(item => (
             <button key={item.id} onClick={() => setTab(item.id)}
-              style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'8px', cursor:'pointer', fontSize:'13px', fontWeight:'600', border:'none', textAlign:'left', width:'100%', background: tab===item.id ? 'rgba(26,86,240,.35)' : 'none', color: tab===item.id ? 'white' : 'rgba(255,255,255,.6)', boxShadow: tab===item.id ? 'inset 2px 0 0 var(--mf-blue)' : 'none', transition:'all .15s' }}>
-              <span style={{ fontSize:'16px' }}>{item.icon}</span>{item.label}
+              style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'var(--r)', cursor:'pointer', fontSize:'13px', fontWeight: tab===item.id ? '600' : '500', border:'none', textAlign:'left', width:'100%', background: tab===item.id ? 'var(--mf-blue-lt)' : 'none', color: tab===item.id ? 'var(--mf-blue)' : 'var(--text2)', transition:'all .15s' }}
+              onMouseOver={e => { if(tab!==item.id) e.currentTarget.style.background='var(--surface)'; }}
+              onMouseOut={e => { if(tab!==item.id) e.currentTarget.style.background='none'; }}>
+              {item.icon}{item.label}
             </button>
           ))}
         </nav>
 
-        <div style={{ padding:'14px 10px', borderTop:'1px solid rgba(255,255,255,.07)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'9px', padding:'9px 10px', background:'rgba(255,255,255,.06)', borderRadius:'8px', marginBottom:'6px' }}>
-            <div style={{ width:'26px', height:'26px', background:'var(--red)', borderRadius:'7px', display:'grid', placeItems:'center', fontSize:'11px', fontWeight:'800', color:'white', flexShrink:0 }}>A</div>
-            <div>
-              <div style={{ fontSize:'12px', fontWeight:'700', color:'white' }}>Admin</div>
-              <div style={{ fontSize:'10px', color:'rgba(255,255,255,.4)' }}>{profile.email}</div>
+        <div style={{ padding:'12px 8px', borderTop:'1px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 10px', borderRadius:'var(--r)', marginBottom:'4px' }}>
+            <div style={{ width:'28px', height:'28px', background:'var(--red)', borderRadius:'50%', display:'grid', placeItems:'center', fontSize:'12px', fontWeight:'700', color:'white', flexShrink:0 }}>A</div>
+            <div style={{ overflow:'hidden', flex:1 }}>
+              <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--text)' }}>Admin</div>
+              <div style={{ fontSize:'11px', color:'var(--muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{profile.email}</div>
             </div>
           </div>
-          <button onClick={signOut} style={{ width:'100%', padding:'8px', borderRadius:'7px', background:'none', border:'1px solid rgba(255,255,255,.1)', color:'rgba(255,255,255,.5)', fontSize:'12px', cursor:'pointer', fontFamily:'Figtree,sans-serif' }}>
+          <button onClick={signOut} style={{ display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'8px 10px', borderRadius:'var(--r)', background:'none', border:'none', color:'var(--muted)', fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}
+            onMouseOver={e => e.currentTarget.style.background='var(--surface)'}
+            onMouseOut={e => e.currentTarget.style.background='none'}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
             Déconnexion
           </button>
         </div>
