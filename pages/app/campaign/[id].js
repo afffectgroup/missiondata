@@ -156,7 +156,7 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     if (d.error) { addLog('❌ Erreur : ' + d.error, 'err'); setBusy(false); return; }
-    addLog(`${d.generated} séquences générées !`, 'ok');
+    addLog(`${d.generated} séquence générée !`, 'ok');
     await load();
     setTab('sequences');
     setBusy(false);
@@ -436,7 +436,7 @@ export default function CampaignPage() {
               </div>
               <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
             </div>
-            {!sequences.length || !sequences[0]?.email_1 ? (
+            {(() => { const seq = sequences.find(s => s.email_1); return !seq; })() ? (
               <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', color:'var(--muted)' }}>
                 <div style={{ width:'40px', height:'40px', background:'var(--surface)', borderRadius:'10px', display:'grid', placeItems:'center', margin:'0 auto 12px' }}>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--muted)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
@@ -446,7 +446,7 @@ export default function CampaignPage() {
                 <button className="btn btn-primary btn-sm" onClick={() => setTab('search')}>Générer la séquence →</button>
               </div>
             ) : (() => {
-              const seq = sequences[0];
+              const seq = sequences.find(s => s.email_1) || sequences[0];
               const messages = [
                 { key:'email_1', label:'Email 1 — Accroche', type:'email' },
                 { key:'email_2', label:'Email 2 — Preuve & KPI', type:'email' },
