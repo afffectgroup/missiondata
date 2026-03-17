@@ -78,9 +78,10 @@ export default function Login() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--muted)', marginTop: '20px' }}>
-          mission-freelances.com · MissionData
-        </p>
+        <div style={{ textAlign: 'center', marginTop: '20px', padding: '14px 16px', background: 'white', borderRadius: 'var(--r)', border: '1px solid var(--border)', fontSize: '13px', lineHeight: '1.6', color: 'var(--text2)' }}>
+          Pour obtenir vos accès à la plateforme, envoyez un e-mail à{' '}
+          <a href="mailto:contact@mission-freelances.fr" style={{ color: 'var(--mf-blue)', fontWeight: '600' }}>contact@mission-freelances.fr</a>
+        </div>
       </div>
     </div>
   );
