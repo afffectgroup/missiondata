@@ -16,8 +16,8 @@ export default function CampaignPage() {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState([]);
   const [toast, setToast] = useState('');
-  const [mirrorCriteria, setMirrorCriteria] = useState(null);
   const [selectedTitles, setSelectedTitles] = useState([]);
+  const [searchLimit, setSearchLimit] = useState(50);
   const [selected, setSelected] = useState([]);
   const [enriching, setEnriching] = useState(false);
 
@@ -89,37 +89,6 @@ export default function CampaignPage() {
   function addLog(msg, type='') { setLog(p => [...p, { msg, type, ts: new Date().toLocaleTimeString() }]); }
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
-  // STEP 1: Mirror — get search criteria from AI
-  async function runMirror() {
-    setBusy(true); addLog('🤖 Analyse du profil client…', 'inf');
-    const token = await getToken();
-    const r = await fetch('/api/campaigns/mirror', {
-      method:'POST',
-      headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        client_sector:   campaign.client_sector,
-        client_type:     campaign.client_type,
-        client_size:     campaign.client_size,
-        client_location: campaign.client_location,
-        client_need:     campaign.client_need,
-      })
-    });
-    const d = await r.json();
-    setMirrorCriteria(d);
-    // Persist to DB so it survives page reload
-    const tk = await getToken();
-    await fetch(`/api/campaigns/${id}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mirror_criteria: d }),
-    });
-    addLog(`Critères générés : ${d.job_titles?.join(', ')}`, 'ok');
-    addLog(`Secteurs directs : ${d.direct_sectors?.join(', ')}`, 'ok');
-    addLog(`Secteurs indirects : ${d.indirect_sectors?.join(', ')}`, 'ok');
-    if (d.rationale) addLog(d.rationale, '');
-    setBusy(false);
-  }
-
   // STEP 2: Search prospects
   async function runSearch() {
     if (!selectedTitles.length) { showToast('Sélectionne au moins un poste.'); return; }
@@ -142,7 +111,7 @@ export default function CampaignPage() {
     const r = await fetch('/api/prospects/search', {
       method:'POST',
       headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ campaign_id: id, query, limit: 50 }),
+      body: JSON.stringify({ campaign_id: id, query, limit: searchLimit }),
     });
     const d = await r.json();
     if (d.error) { addLog('Erreur : ' + d.error, 'err'); setBusy(false); return; }
@@ -193,9 +162,9 @@ export default function CampaignPage() {
 
   const tabs = [
     { id:'overview',  label:'Aperçu',                  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg> },
-    { id:'search',    label:'Recherche',                icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg> },
+    { id:'search',    label:'Génération',               icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg> },
     { id:'prospects', label:`Prospects (${prospects.length})`, icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg> },
-    { id:'sequences', label:'Séquence',  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg> },
+    { id:'sequences', label:'Séquence',                 icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg> },
   ];
 
   return (
@@ -250,7 +219,7 @@ export default function CampaignPage() {
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px', marginBottom:'20px' }}>
               <div className="card">
                 <div className="card-title">Client miroir</div>
-                {[['Type', campaign.client_type],['Secteur',campaign.client_sector],['Taille',campaign.client_size],['Localisation',campaign.client_location],['Besoin',campaign.client_need]].filter(r=>r[1]).map(([k,v])=>(
+                {[['Type', campaign.client_type],['Secteur',campaign.client_sector],['Poste ciblé',campaign.job_title_target],['Localisation',campaign.client_location],['Besoin',campaign.client_need]].filter(r=>r[1]).map(([k,v])=>(
                   <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid var(--border)', fontSize:'13px' }}>
                     <span style={{ color:'var(--muted)', fontWeight:'500' }}>{k}</span>
                     <span style={{ fontWeight:'600' }}>{v}</span>
@@ -307,8 +276,18 @@ export default function CampaignPage() {
                   <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
                     <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: prospects.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: prospects.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{prospects.length ? '✓' : '2'}</div>
                     <div>
-                      <div style={{ fontSize:'14px', fontWeight:'600' }}>Recherche Icypeas</div>
-                      <div style={{ fontSize:'12px', color:'var(--muted)' }}>Génère jusqu'à 50 prospects LinkedIn selon les postes sélectionnés</div>
+                      <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'6px' }}>Recherche Icypeas</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                        <span style={{ fontSize:'12px', color:'var(--muted)' }}>Nombre de prospects :</span>
+                        {[10, 25, 50].map(n => (
+                          <button key={n} onClick={() => setSearchLimit(n)}
+                            style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', cursor:'pointer', border:'1.5px solid',
+                              borderColor: searchLimit === n ? 'var(--mf-green)' : 'var(--border)',
+                              background: searchLimit === n ? 'var(--mf-green-lt)' : 'white',
+                              color: searchLimit === n ? 'var(--mf-green)' : 'var(--text2)',
+                            }}>{n}</button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <button className={`btn btn-${prospects.length ? 'ghost' : 'primary'} btn-sm`} onClick={runSearch} disabled={busy || !selectedTitles.length} style={{ flexShrink:0 }}>

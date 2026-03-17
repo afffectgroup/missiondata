@@ -277,9 +277,8 @@ function NewCampaignModal({ onClose, onCreated }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', client_type: 'PME', client_sector: '',
-    client_location: '', client_need: '',
-    freelance_result: '', freelance_kpi: '', freelance_angle: '', freelance_tone: 'professionnel'
+    name: '', client_type: 'PME', client_sector: '', job_title_target: '', client_location: '',
+    client_need: '', freelance_result: '', freelance_kpi: '', freelance_angle: '', freelance_tone: 'professionnel'
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -348,7 +347,7 @@ function NewCampaignModal({ onClose, onCreated }) {
               <div className="field"><label>Besoin identifié</label>{inp('client_need', { placeholder: 'Ex : Site web, Communication, Formation...' })}</div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
                 <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-                <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector}>Suivant →</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target}>Suivant →</button>
               </div>
             </>
           )}
