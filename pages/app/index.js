@@ -277,7 +277,7 @@ function NewCampaignModal({ onClose, onCreated }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', client_type: 'PME', client_sector: '', job_title_target: '', client_location: '',
+    name: '', client_type: 'PME', client_sector: '', job_title_target: '', job_title_custom: '', client_location: '',
     client_need: '', freelance_result: '', freelance_kpi: '', freelance_angle: '', freelance_tone: 'professionnel'
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -289,7 +289,7 @@ function NewCampaignModal({ onClose, onCreated }) {
     const r = await fetch('/api/campaigns', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${s.session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify({ ...form, job_title_target: form.job_title_target === '__autre__' ? form.job_title_custom : form.job_title_target })
     });
     const d = await r.json();
     if (d.campaign) onCreated(d.campaign.id);
@@ -400,12 +400,21 @@ function NewCampaignModal({ onClose, onCreated }) {
                     <option value="Restaurateur">Restaurateur</option>
                     <option value="Artisan">Artisan / Chef d'atelier</option>
                   </optgroup>
+                  <optgroup label="Autre">
+                    <option value="__autre__">Autre (à préciser)</option>
+                  </optgroup>
                 </select>
               </div>
+              {form.job_title_target === '__autre__' && (
+                <div className="field">
+                  <label>Précisez le poste *</label>
+                  {inp('job_title_custom', { placeholder: 'Ex : Responsable qualité, Chef de projet...' })}
+                </div>
+              )}
               <div className="field"><label>Localisation</label>{inp('client_location', { placeholder: 'Ex : Rennes, Paris, Lyon...' })}</div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
                 <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-                <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target}>Suivant →</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target || (form.job_title_target === '__autre__' && !form.job_title_custom)}>Suivant →</button>
               </div>
             </>
           )}
