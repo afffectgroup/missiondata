@@ -17,6 +17,7 @@ export default function CampaignPage() {
   const [log, setLog] = useState([]);
   const [toast, setToast] = useState('');
   const [mirrorCriteria, setMirrorCriteria] = useState(null);
+  const [selectedTitles, setSelectedTitles] = useState([]);
   const [selected, setSelected] = useState([]);
   const [enriching, setEnriching] = useState(false);
 
@@ -76,6 +77,7 @@ export default function CampaignPage() {
       setProspects(d.prospects||[]);
       setSequences(d.sequences||[]);
       if (d.campaign.mirror_criteria) setMirrorCriteria(d.campaign.mirror_criteria);
+      if (d.campaign.selected_titles) setSelectedTitles(d.campaign.selected_titles);
     }
   }
 
@@ -120,17 +122,22 @@ export default function CampaignPage() {
 
   // STEP 2: Search prospects
   async function runSearch() {
-    if (!mirrorCriteria) { showToast('Lance d\'abord le mirroring IA.'); return; }
+    if (!selectedTitles.length) { showToast('Sélectionne au moins un poste.'); return; }
     setBusy(true); addLog('Recherche Icypeas en cours…', 'inf');
     const token = await getToken();
 
-    const allSectors = [...(mirrorCriteria.direct_sectors||[]), ...(mirrorCriteria.indirect_sectors||[])];
+    // Persist selected titles
+    await fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_titles: selectedTitles }),
+    });
+
     const query = {
-      currentJobTitle: { include: mirrorCriteria.job_titles || [] },
-      location:        mirrorCriteria.locations?.length ? { include: mirrorCriteria.locations } : undefined,
-      industry:        allSectors.length ? { include: allSectors } : undefined,
+      currentJobTitle: { include: selectedTitles },
+      ...(campaign.client_location ? { location: { include: [campaign.client_location] } } : {}),
+      ...(campaign.client_sector ? { industry: { include: [campaign.client_sector] } } : {}),
     };
-    Object.keys(query).forEach(k => query[k] === undefined && delete query[k]);
 
     const r = await fetch('/api/prospects/search', {
       method:'POST',
@@ -138,7 +145,7 @@ export default function CampaignPage() {
       body: JSON.stringify({ campaign_id: id, query, limit: 50 }),
     });
     const d = await r.json();
-    if (d.error) { addLog('❌ Erreur : ' + d.error, 'err'); setBusy(false); return; }
+    if (d.error) { addLog('Erreur : ' + d.error, 'err'); setBusy(false); return; }
     addLog(`${d.saved} prospects sauvegardés (${d.total} disponibles)`, 'ok');
     await load();
     setBusy(false);
@@ -273,44 +280,60 @@ export default function CampaignPage() {
         {/* SEARCH */}
         {tab==='search' && (
           <div>
-            <h2 style={{ fontSize:'16px', fontWeight:'800', marginBottom:'16px' }}>Génération de la base prospects</h2>
+            <div style={{ marginBottom:'20px' }}>
+              <h2 style={{ fontSize:'16px', fontWeight:'700', marginBottom:'2px' }}>Génération de la base prospects</h2>
+              <p style={{ fontSize:'13px', color:'var(--muted)' }}>Secteur : <strong>{campaign.client_sector}</strong> · Localisation : <strong>{campaign.client_location || 'France'}</strong></p>
+            </div>
 
             {/* Steps */}
             <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'20px' }}>
-              {[
-                { n:1, title:'Mirroring IA', desc:'L\'IA analyse le profil client et génère les critères de ciblage (concurrents directs + indirects)', action: runMirror, label:'Lancer le mirroring', done: !!mirrorCriteria },
-                { n:2, title:'Recherche Icypeas', desc:'Génère la base de 50 prospects LinkedIn selon les critères du mirroring', action: runSearch, label:'Lancer la recherche', done: prospects.length > 0 },
-                { n:3, title:'Séquence IA', desc:'Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts, basés sur ton cas client', action: runSequences, label:'Générer la séquence', done: sequences.length > 0 },
-              ].map(step => (
-                <div key={step.n} className="card" style={{ borderLeft:`3px solid ${step.done?'var(--mf-green)':busy?'var(--mf-blue)':'var(--border)'}` }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-                      <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:step.done?'var(--mf-green-lt)':'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontSize:'15px', fontWeight:'800', color:step.done?'var(--mf-green)':'var(--mf-blue)', flexShrink:0 }}>{step.done?'✓':step.n}</div>
-                      <div>
-                        <div style={{ fontSize:'14px', fontWeight:'700' }}>{step.title}</div>
-                        <div style={{ fontSize:'12px', color:'var(--muted)' }}>{step.desc}</div>
-                      </div>
-                    </div>
-                    <button className={`btn btn-${step.done?'ghost':'primary'} btn-sm`} onClick={step.action} disabled={busy} style={{ flexShrink:0 }}>
-                      {busy && !step.done ? <div className="spinner" /> : null}
-                      {step.done ? 'Relancer' : step.label}
-                    </button>
-                  </div>
 
-                  {/* Mirror criteria display */}
-                  {step.n===1 && mirrorCriteria && (
-                    <div style={{ marginTop:'12px', background:'var(--surface)', borderRadius:'8px', padding:'12px' }}>
-                      <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--muted)', marginBottom:'6px', textTransform:'uppercase', letterSpacing:'1px' }}>Critères générés</div>
-                      <div style={{ display:'flex', flexWrap:'wrap', gap:'5px' }}>
-                        {mirrorCriteria.job_titles?.map(j=><span key={j} style={{ background:'var(--mf-blue-lt)', color:'var(--mf-blue)', padding:'2px 8px', borderRadius:'5px', fontSize:'11px', fontWeight:'600' }}>{j}</span>)}
-                        {mirrorCriteria.direct_sectors?.map(s=><span key={s} style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', padding:'2px 8px', borderRadius:'5px', fontSize:'11px', fontWeight:'600' }}>Direct: {s}</span>)}
-                        {mirrorCriteria.indirect_sectors?.map(s=><span key={s} style={{ background:'#f0ebff', color:'#7c3aed', padding:'2px 8px', borderRadius:'5px', fontSize:'11px', fontWeight:'600' }}>Indirect: {s}</span>)}
-                      </div>
-                      {mirrorCriteria.rationale && <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'8px' }}>{mirrorCriteria.rationale}</div>}
+              {/* STEP 1: Select job titles */}
+              <div className="card" style={{ borderLeft:`3px solid ${selectedTitles.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'12px', flex:1 }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: selectedTitles.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: selectedTitles.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{selectedTitles.length ? '✓' : '1'}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'8px' }}>Postes ciblés</div>
+                      <JobTitleSelector selected={selectedTitles} onChange={setSelectedTitles} sector={campaign.client_sector} />
                     </div>
-                  )}
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              {/* STEP 2: Search */}
+              <div className="card" style={{ borderLeft:`3px solid ${prospects.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: prospects.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: prospects.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{prospects.length ? '✓' : '2'}</div>
+                    <div>
+                      <div style={{ fontSize:'14px', fontWeight:'600' }}>Recherche Icypeas</div>
+                      <div style={{ fontSize:'12px', color:'var(--muted)' }}>Génère jusqu'à 50 prospects LinkedIn selon les postes sélectionnés</div>
+                    </div>
+                  </div>
+                  <button className={`btn btn-${prospects.length ? 'ghost' : 'primary'} btn-sm`} onClick={runSearch} disabled={busy || !selectedTitles.length} style={{ flexShrink:0 }}>
+                    {busy ? <div className="spinner" /> : null}
+                    {prospects.length ? 'Relancer' : 'Lancer la recherche'}
+                  </button>
+                </div>
+              </div>
+
+              {/* STEP 3: Sequence */}
+              <div className="card" style={{ borderLeft:`3px solid ${sequences.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+                    <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: sequences.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: sequences.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{sequences.length ? '✓' : '3'}</div>
+                    <div>
+                      <div style={{ fontSize:'14px', fontWeight:'600' }}>Séquence IA</div>
+                      <div style={{ fontSize:'12px', color:'var(--muted)' }}>Génère 1 séquence de 3 emails + 2 LinkedIn identiques pour tous les contacts</div>
+                    </div>
+                  </div>
+                  <button className={`btn btn-${sequences.length ? 'ghost' : 'primary'} btn-sm`} onClick={runSequences} disabled={busy || !prospects.length} style={{ flexShrink:0 }}>
+                    {busy ? <div className="spinner" /> : null}
+                    {sequences.length ? 'Relancer' : 'Générer la séquence'}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Log */}
@@ -513,6 +536,77 @@ function SingleSequenceCard({ label, type, content: initialContent, seqId, field
           <pre style={{ fontFamily:'inherit', fontSize:'13px', lineHeight:'1.7', whiteSpace:'pre-wrap', color:'var(--text2)', margin:0 }}>{val || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>Aucun contenu</span>}</pre>
         )}
       </div>
+    </div>
+  );
+}
+
+const JOB_TITLES_BY_SECTOR = {
+  default: [
+    'Directeur Général','PDG','CEO','Gérant','Directeur Associé',
+    'DAF','Directeur Administratif et Financier',
+    'DRH','Directeur des Ressources Humaines',
+    'DSI','Directeur des Systèmes d\'Information',
+    'Directeur Commercial','Directeur Marketing',
+    'Directeur des Opérations','COO',
+    'Fondateur','Co-fondateur',
+  ],
+  Accounting: ['Expert-comptable','Commissaire aux comptes','Chef comptable','DAF','Directeur administratif et financier','Responsable comptabilité','Contrôleur de gestion','Directeur financier'],
+  Insurance: ['Courtier en assurance','Agent général d\'assurance','Directeur agence assurance','Responsable sinistres','Chargé de clientèle assurance','Directeur régional assurance'],
+  'Real Estate': ['Agent immobilier','Directeur agence immobilière','Négociateur immobilier','Promoteur immobilier','Gestionnaire de biens','Directeur patrimoine'],
+  Construction: ['Chef de chantier','Conducteur de travaux','Directeur travaux','Maître d\'oeuvre','Architecte','Directeur BTP','Responsable technique'],
+  'Marketing and Advertising': ['Directeur artistique','Directeur agence communication','Chef de projet digital','Directeur marketing','Responsable communication','Head of Marketing'],
+  'Information Technology and Services': ['CTO','DSI','Directeur technique','Responsable IT','Chef de projet IT','Directeur digital','Head of Engineering'],
+  'Management Consulting': ['Associé cabinet conseil','Directeur conseil','Manager consulting','Partner','Senior Manager'],
+  'Financial Services': ['Directeur financier','DAF','Gérant patrimoine','Responsable gestion','Directeur agence bancaire','Conseiller en gestion de patrimoine'],
+  'Health, Wellness and Fitness': ['Directeur clinique','Responsable centre santé','Médecin directeur','Directeur EHPAD','Responsable établissement santé'],
+  'Professional Training & Coaching': ['Directeur organisme formation','Responsable formation','Directeur pédagogique','Gérant centre formation'],
+  'Restaurants': ['Restaurateur','Gérant restaurant','Directeur restauration','Chef cuisinier étoilé','Directeur groupe restauration'],
+  'Retail': ['Directeur magasin','Responsable point de vente','Directeur commercial','Gérant boutique','Directeur réseau'],
+  'Staffing and Recruiting': ['Directeur cabinet recrutement','Consultant recrutement senior','Responsable RH','DRH','Head of Talent'],
+  'Law Practice': ['Avocat associé','Directeur cabinet juridique','Managing Partner','Associé','Responsable juridique'],
+  'Legal Services': ['Directeur juridique','Responsable affaires juridiques','Juriste senior','General Counsel'],
+};
+
+function JobTitleSelector({ selected, onChange, sector }) {
+  const [custom, setCustom] = useState('');
+  const titles = JOB_TITLES_BY_SECTOR[sector] || JOB_TITLES_BY_SECTOR.default;
+
+  function toggle(t) {
+    onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t]);
+  }
+
+  function addCustom() {
+    const v = custom.trim();
+    if (v && !selected.includes(v)) onChange([...selected, v]);
+    setCustom('');
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'10px' }}>
+        {titles.map(t => (
+          <button key={t} onClick={() => toggle(t)}
+            style={{ padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', cursor:'pointer', border:'1.5px solid', transition:'all .15s',
+              borderColor: selected.includes(t) ? 'var(--mf-green)' : 'var(--border)',
+              background: selected.includes(t) ? 'var(--mf-green-lt)' : 'white',
+              color: selected.includes(t) ? 'var(--mf-green)' : 'var(--text2)',
+            }}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:'8px' }}>
+        <input className="input" placeholder="Ajouter un poste personnalisé..." value={custom} onChange={e => setCustom(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addCustom()}
+          style={{ flex:1, fontSize:'12px' }} />
+        <button className="btn btn-ghost btn-sm" onClick={addCustom} disabled={!custom.trim()}>+ Ajouter</button>
+      </div>
+      {selected.length > 0 && (
+        <div style={{ marginTop:'8px', fontSize:'12px', color:'var(--muted)' }}>
+          {selected.length} poste{selected.length > 1 ? 's' : ''} sélectionné{selected.length > 1 ? 's' : ''}
+          <button onClick={() => onChange([])} style={{ marginLeft:'8px', background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'12px', fontFamily:'inherit' }}>Tout effacer</button>
+        </div>
+      )}
     </div>
   );
 }
