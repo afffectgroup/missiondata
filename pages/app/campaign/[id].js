@@ -580,36 +580,12 @@ function JobTitleSelector({ selected, onChange, sector }) {
 
   const customTitles = selected.filter(t => !titles.includes(t));
 
-  if (!titles.length) return (
-    <div style={{ background:'#fff8e6', border:'1px solid #f0c040', borderRadius:'var(--r)', padding:'12px 16px', fontSize:'13px', color:'#8a6000' }}>
-      Ce dossier a été créé avec l'ancien format. Crée un nouveau dossier pour bénéficier de la sélection de postes par domaine, ou ajoute des postes manuellement ci-dessous.
-      <div style={{ marginTop:'10px', display:'flex', gap:'8px' }}>
-        <input className="input" placeholder="Ajouter un poste personnalisé..." value={custom} onChange={e => setCustom(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addCustom()} style={{ flex:1, fontSize:'12px' }} />
-        {custom.trim() && <button className="btn btn-ghost btn-sm" onClick={addCustom}>+ Ajouter</button>}
-      </div>
-      {customTitles.length > 0 && (
-        <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginTop:'10px' }}>
-          {customTitles.map(t => (
-            <span key={t} style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'600', background:'var(--mf-blue-lt)', color:'var(--mf-blue)', border:'1.5px solid var(--mf-blue)' }}>
-              {t}
-              <button onClick={() => onChange(selected.filter(x => x !== t))} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--mf-blue)', fontSize:'14px', lineHeight:1, padding:0, fontFamily:'inherit' }}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div>
       <p style={{ fontSize:'12px', color:'var(--muted)', marginBottom:'8px' }}>Sélectionne les postes à cibler parmi les suggestions ci-dessous, ou ajoute un poste personnalisé.</p>
       {/* Pre-defined chips */}
-      {titles.length === 0 && (
-        <div style={{ padding:'10px 12px', background:'#fff8e6', border:'1px solid #f0c040', borderRadius:'var(--r)', fontSize:'12px', color:'#8a6000', marginBottom:'8px' }}>
-          Aucun poste suggéré pour ce domaine. Ajoute un poste personnalisé ci-dessous.
-        </div>
-      )}
+
       <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'8px' }}>
         {titles.map(t => (
           <button key={t} onClick={() => toggle(t)}
