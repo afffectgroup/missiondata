@@ -264,7 +264,7 @@ export default function CampaignPage() {
           <div>
             <div style={{ marginBottom:'20px' }}>
               <h2 style={{ fontSize:'16px', fontWeight:'700', marginBottom:'2px' }}>Génération de la base prospects</h2>
-              <p style={{ fontSize:'13px', color:'var(--muted)' }}>Secteur : <strong>{campaign.client_sector}</strong> · Localisation : <strong>{campaign.client_location || 'France'}</strong></p>
+              <p style={{ fontSize:'13px', color:'var(--muted)' }}>Secteur : <strong>{campaign.client_sector}</strong> · Domaine : <strong>{campaign.job_title_target || '—'}</strong> · Localisation : <strong>{campaign.client_location || 'France'}</strong></p>
             </div>
 
             {/* Steps */}
@@ -566,7 +566,8 @@ const JOB_TITLES_BY_DOMAIN = {
 
 function JobTitleSelector({ selected, onChange, sector }) {
   const [custom, setCustom] = useState('');
-  const titles = JOB_TITLES_BY_DOMAIN[sector] || [];
+  const normalizedSector = (sector || '').trim();
+  const titles = JOB_TITLES_BY_DOMAIN[normalizedSector] || [];
 
   function toggle(t) {
     onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t]);
