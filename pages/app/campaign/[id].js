@@ -17,7 +17,7 @@ export default function CampaignPage() {
   const [log, setLog] = useState([]);
   const [toast, setToast] = useState('');
   const [selectedTitles, setSelectedTitles] = useState([]);
-  const [searchLimit, setSearchLimit] = useState(50);
+  const [searchLimit, setSearchLimit] = useState(null); // null = use campaign.prospect_limit
   const [selected, setSelected] = useState([]);
   const [enriching, setEnriching] = useState(false);
 
@@ -111,7 +111,7 @@ export default function CampaignPage() {
     const r = await fetch('/api/prospects/search', {
       method:'POST',
       headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ campaign_id: id, query, limit: searchLimit }),
+      body: JSON.stringify({ campaign_id: id, query, limit: searchLimit || campaign.prospect_limit || 10 }),
     });
     const d = await r.json();
     if (d.error) { addLog('Erreur : ' + d.error, 'err'); setBusy(false); return; }
@@ -279,14 +279,17 @@ export default function CampaignPage() {
                       <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'6px' }}>Recherche Icypeas</div>
                       <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                         <span style={{ fontSize:'12px', color:'var(--muted)' }}>Nombre de prospects :</span>
-                        {[10, 25, 50].map(n => (
-                          <button key={n} onClick={() => setSearchLimit(n)}
-                            style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', cursor:'pointer', border:'1.5px solid',
-                              borderColor: searchLimit === n ? 'var(--mf-green)' : 'var(--border)',
-                              background: searchLimit === n ? 'var(--mf-green-lt)' : 'white',
-                              color: searchLimit === n ? 'var(--mf-green)' : 'var(--text2)',
-                            }}>{n}</button>
-                        ))}
+                        {[10, 25, 50].map(n => {
+                          const active = (searchLimit || campaign.prospect_limit || 10) === n;
+                          return (
+                            <button key={n} onClick={() => setSearchLimit(n)}
+                              style={{ padding:'3px 10px', borderRadius:'20px', fontSize:'12px', fontWeight: active ? '700' : '500', cursor:'pointer', border:'1.5px solid',
+                                borderColor: active ? 'var(--mf-green)' : 'var(--border)',
+                                background: active ? 'var(--mf-green-lt)' : 'white',
+                                color: active ? 'var(--mf-green)' : 'var(--text2)',
+                              }}>{n}</button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -560,9 +563,12 @@ function JobTitleSelector({ selected, onChange, sector }) {
     setCustom('');
   }
 
+  const customTitles = selected.filter(t => !titles.includes(t));
+
   return (
     <div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'10px' }}>
+      {/* Pre-defined chips */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'8px' }}>
         {titles.map(t => (
           <button key={t} onClick={() => toggle(t)}
             style={{ padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'500', cursor:'pointer', border:'1.5px solid', transition:'all .15s',
@@ -573,17 +579,25 @@ function JobTitleSelector({ selected, onChange, sector }) {
             {t}
           </button>
         ))}
+        {/* Custom chips */}
+        {customTitles.map(t => (
+          <span key={t} style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'600', background:'var(--mf-blue-lt)', color:'var(--mf-blue)', border:'1.5px solid var(--mf-blue)' }}>
+            {t}
+            <button onClick={() => onChange(selected.filter(x => x !== t))} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--mf-blue)', fontSize:'14px', lineHeight:1, padding:0, fontFamily:'inherit' }}>×</button>
+          </span>
+        ))}
       </div>
-      <div style={{ display:'flex', gap:'8px' }}>
+      {/* Custom input */}
+      <div style={{ display:'flex', gap:'8px', marginTop:'6px' }}>
         <input className="input" placeholder="Ajouter un poste personnalisé..." value={custom} onChange={e => setCustom(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && addCustom()}
           style={{ flex:1, fontSize:'12px' }} />
-        <button className="btn btn-ghost btn-sm" onClick={addCustom} disabled={!custom.trim()}>+ Ajouter</button>
+        {custom.trim() && <button className="btn btn-ghost btn-sm" onClick={addCustom}>+ Ajouter</button>}
       </div>
       {selected.length > 0 && (
-        <div style={{ marginTop:'8px', fontSize:'12px', color:'var(--muted)' }}>
-          {selected.length} poste{selected.length > 1 ? 's' : ''} sélectionné{selected.length > 1 ? 's' : ''}
-          <button onClick={() => onChange([])} style={{ marginLeft:'8px', background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'12px', fontFamily:'inherit' }}>Tout effacer</button>
+        <div style={{ marginTop:'8px', fontSize:'12px', color:'var(--muted)', display:'flex', alignItems:'center', gap:'8px' }}>
+          <span>{selected.length} poste{selected.length > 1 ? 's' : ''} sélectionné{selected.length > 1 ? 's' : ''}</span>
+          <button onClick={() => onChange([])} style={{ background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'12px', fontFamily:'inherit' }}>Tout effacer</button>
         </div>
       )}
     </div>
