@@ -10,27 +10,40 @@ export default async function handler(req, res) {
   const { campaign_id } = req.body;
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id requis.' });
 
-  const { data: campaign } = await supabaseAdmin
+  const { data: campaign, error: campErr } = await supabaseAdmin
     .from('campaigns').select('*').eq('id', campaign_id).eq('user_id', profile.id).single();
-  if (!campaign) return res.status(404).json({ error: 'Campagne introuvable.' });
+  if (!campaign) return res.status(404).json({ error: 'Campagne introuvable.', detail: campErr?.message });
 
   await supabaseAdmin.from('campaigns').update({ status: 'generating' }).eq('id', campaign_id);
 
   try {
+    // Generate sequence via Claude
     const seq = await generateSequence(campaign);
+    console.log('SEQ GENERATED:', JSON.stringify(seq).slice(0, 100));
 
+    // Delete existing
     await supabaseAdmin.from('sequences').delete().eq('campaign_id', campaign_id);
 
-    const { data: saved } = await supabaseAdmin.from('sequences').insert({
-      campaign_id,
-      prospect_id: null,
-      user_id:     profile.id,
-      email_1:     seq.email_1,
-      email_2:     seq.email_2,
-      email_3:     seq.email_3,
-      linkedin_1:  seq.linkedin_1,
-      linkedin_2:  seq.linkedin_2,
-    }).select().single();
+    // Insert single sequence — no prospect_id
+    const { data: saved, error: insertErr } = await supabaseAdmin
+      .from('sequences')
+      .insert({
+        campaign_id,
+        user_id:    profile.id,
+        email_1:    seq.email_1 || '',
+        email_2:    seq.email_2 || '',
+        email_3:    seq.email_3 || '',
+        linkedin_1: seq.linkedin_1 || '',
+        linkedin_2: seq.linkedin_2 || '',
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      console.error('INSERT ERROR:', insertErr);
+      await supabaseAdmin.from('campaigns').update({ status: 'draft' }).eq('id', campaign_id);
+      return res.status(500).json({ error: 'Erreur insertion : ' + insertErr.message });
+    }
 
     await supabaseAdmin.from('campaigns').update({
       status: 'done',
@@ -41,6 +54,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ generated: 1, sequences: [saved] });
 
   } catch(err) {
+    console.error('GENERATE ERROR:', err);
     await supabaseAdmin.from('campaigns').update({ status: 'draft' }).eq('id', campaign_id);
     return res.status(500).json({ error: err.message });
   }
@@ -60,17 +74,15 @@ async function generateSequence(campaign) {
     '- Localisation : ' + (campaign.client_location || 'France'),
     '- Type : ' + (campaign.client_type || 'PME'),
     '',
-    'REGLE ABSOLUE : Génère UNE séquence générique pour tous les prospects.',
-    'JAMAIS de nom ou prénom réel dans les messages.',
-    'Utilise EXACTEMENT {{PRENOM}} et {{ENTREPRISE}} comme variables, sans les remplacer.',
+    'Génère UNE séquence de prospection avec des variables {{PRENOM}} et {{ENTREPRISE}}.',
     '',
     'Réponds UNIQUEMENT en JSON valide sans markdown :',
     '{',
-    '  "email_1": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[accroche, max 80 mots]",',
-    '  "email_2": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[cas client + KPI, max 100 mots]",',
-    '  "email_3": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[relance courte, max 50 mots]",',
-    '  "linkedin_1": "Bonjour {{PRENOM}}, [connexion, max 280 caractères total]",',
-    '  "linkedin_2": "Bonjour {{PRENOM}}, [suivi post-connexion, max 120 mots]"',
+    '  "email_1": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[accroche, max 80 mots]\\n\\nCordialement",',
+    '  "email_2": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[cas client + KPI, max 100 mots]\\n\\nCordialement",',
+    '  "email_3": "Objet: ...\\n\\nBonjour {{PRENOM}},\\n\\n[relance courte, max 50 mots]\\n\\nCordialement",',
+    '  "linkedin_1": "Bonjour {{PRENOM}}, [note de connexion, max 280 caractères]",',
+    '  "linkedin_2": "Bonjour {{PRENOM}}, [message suivi post-connexion chez {{ENTREPRISE}}, max 120 mots]"',
     '}',
   ].join('\n');
 
@@ -82,18 +94,20 @@ async function generateSequence(campaign) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
 
   const data = await response.json();
+  if (data.error) throw new Error('Claude API: ' + data.error.message);
   const text = data.content?.[0]?.text || '{}';
 
   try {
     return JSON.parse(text.replace(/```json|```/g, '').trim());
-  } catch {
-    return { email_1: text, email_2: '', email_3: '', linkedin_1: '', linkedin_2: '' };
+  } catch(e) {
+    console.error('JSON PARSE ERROR:', text.slice(0, 200));
+    throw new Error('Réponse Claude invalide');
   }
 }
