@@ -373,7 +373,7 @@ export default function CampaignPage() {
                     {enriching ? 'Recuperation...' : 'Recuperer les emails (' + prospects.filter(p => p.icypeas_search_id && !p.email).length + ')'}
                   </button>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
+  
               </div>
             </div>
 
@@ -469,7 +469,7 @@ export default function CampaignPage() {
                 <h2 style={{ fontSize:'16px', fontWeight:'700' }}>Séquence de prospection</h2>
                 <p style={{ fontSize:'12px', color:'var(--muted)', marginTop:'2px' }}>1 séquence commune — utilisez [Prénom] et [Entreprise] comme variables</p>
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
+
             </div>
             {(() => { const seq = sequences.find(s => s.email_1); return !seq; })() ? (
               <div style={{ textAlign:'center', padding:'60px', background:'white', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', color:'var(--muted)' }}>
