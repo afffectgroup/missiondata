@@ -277,7 +277,7 @@ function NewCampaignModal({ onClose, onCreated }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', client_type: 'PME', client_sector: '', job_title_target: '', job_title_custom: '', client_location: '',
+    name: '', client_type: 'PME', client_sector: '', job_title_target: '', job_title_custom: '', client_location: '', prospect_limit: 10,
     client_need: '', freelance_result: '', freelance_kpi: '', freelance_angle: '', freelance_tone: 'professionnel'
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -412,6 +412,17 @@ function NewCampaignModal({ onClose, onCreated }) {
                 </div>
               )}
               <div className="field"><label>Localisation</label>{inp('client_location', { placeholder: 'Ex : Rennes, Paris, Lyon...' })}</div>
+              <div className="field">
+                <label>Taille de la liste</label>
+                <div style={{ display:'flex', gap:'8px' }}>
+                  {[10, 25, 50].map(n => (
+                    <button key={n} type="button" onClick={() => f('prospect_limit', n)}
+                      style={{ flex:1, padding:'9px', borderRadius:'var(--r)', border: form.prospect_limit===n ? '2px solid var(--mf-blue)' : '1px solid var(--border)', background: form.prospect_limit===n ? 'var(--mf-blue-lt)' : 'white', color: form.prospect_limit===n ? 'var(--mf-blue)' : 'var(--text2)', fontWeight: form.prospect_limit===n ? '700' : '500', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
+                      {n} prospects
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
                 <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
                 <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target || (form.job_title_target === '__autre__' && !form.job_title_custom)}>Suivant →</button>
