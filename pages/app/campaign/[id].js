@@ -172,35 +172,51 @@ export default function CampaignPage() {
   if (loading || !campaign) return <div style={{ display:'grid', placeItems:'center', height:'100vh', color:'var(--muted)' }}>Chargement…</div>;
 
   const tabs = [
-    { id:'overview', label:'🗂 Aperçu' },
-    { id:'search',   label:'🔍 Recherche' },
-    { id:'prospects',label:`👥 Prospects (${prospects.length})` },
-    { id:'sequences',label:`✉️ Séquences (${sequences.length})` },
+    { id:'overview',  label:'Aperçu',                  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg> },
+    { id:'search',    label:'Recherche',                icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg> },
+    { id:'prospects', label:`Prospects (${prospects.length})`, icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg> },
+    { id:'sequences', label:`Séquences (${sequences.length})`,  icon:<svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg> },
   ];
 
   return (
     <div style={{ display:'flex', minHeight:'100vh' }}>
 
       {/* SIDEBAR */}
-      <aside style={{ width:'220px', background:'var(--mf-dark)', display:'flex', flexDirection:'column', flexShrink:0 }}>
-        <div style={{ padding:'16px 12px', borderBottom:'1px solid rgba(255,255,255,.08)' }}>
-          <button onClick={() => router.push('/app')} style={{ display:'flex', alignItems:'center', gap:'6px', background:'none', border:'none', color:'rgba(255,255,255,.5)', fontSize:'12px', cursor:'pointer', fontFamily:'Figtree,sans-serif', padding:'4px', borderRadius:'6px', marginBottom:'10px' }}>← Mes dossiers</button>
-          <div style={{ fontSize:'13px', fontWeight:'700', color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{campaign.name}</div>
-          <span className={`badge badge-${campaign.status==='done'?'green':campaign.status==='generating'?'blue':'muted'}`} style={{ fontSize:'10px', marginTop:'6px' }}>
-            {campaign.status==='done'?'✅ Terminé':campaign.status==='generating'?'⏳ En cours':'📝 Brouillon'}
+      <aside style={{ width:'240px', background:'white', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', flexShrink:0, position:'sticky', top:0, height:'100vh' }}>
+        {/* Header */}
+        <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)' }}>
+          <button onClick={() => router.push('/app')} style={{ display:'flex', alignItems:'center', gap:'6px', background:'none', border:'none', color:'var(--muted)', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', padding:'4px 6px', borderRadius:'6px', marginBottom:'10px' }}
+            onMouseOver={e => e.currentTarget.style.color='var(--text)'}
+            onMouseOut={e => e.currentTarget.style.color='var(--muted)'}>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd"/></svg>
+            Mes dossiers
+          </button>
+          <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'6px' }}>{campaign.name}</div>
+          <span className={`badge badge-${campaign.status==='done'?'green':campaign.status==='generating'?'blue':'muted'}`} style={{ fontSize:'11px' }}>
+            {campaign.status==='done'?'Terminé':campaign.status==='generating'?'En cours':'Brouillon'}
           </span>
         </div>
-        <nav style={{ flex:1, padding:'10px' }}>
+
+        {/* Nav tabs */}
+        <nav style={{ flex:1, padding:'12px 8px' }}>
+          <div style={{ fontSize:'11px', fontWeight:'600', color:'var(--muted)', padding:'8px 8px 4px', letterSpacing:'0.5px', textTransform:'uppercase' }}>Navigation</div>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ display:'block', width:'100%', textAlign:'left', padding:'9px 10px', borderRadius:'7px', border:'none', fontSize:'13px', fontWeight:'600', cursor:'pointer', marginBottom:'2px', background:tab===t.id?'rgba(26,86,240,.35)':'none', color:tab===t.id?'white':'rgba(255,255,255,.55)', boxShadow:tab===t.id?'inset 2px 0 0 var(--mf-blue)':'none', fontFamily:'Figtree,sans-serif', transition:'all .15s' }}>
+              style={{ display:'flex', alignItems:'center', gap:'10px', width:'100%', textAlign:'left', padding:'9px 10px', borderRadius:'var(--r)', border:'none', fontSize:'13px', fontWeight: tab===t.id ? '600' : '500', cursor:'pointer', marginBottom:'2px', background: tab===t.id ? 'var(--mf-blue-lt)' : 'none', color: tab===t.id ? 'var(--mf-blue)' : 'var(--text2)', fontFamily:'inherit', transition:'all .15s' }}
+              onMouseOver={e => { if(tab!==t.id) e.currentTarget.style.background='var(--surface)'; }}
+              onMouseOut={e => { if(tab!==t.id) e.currentTarget.style.background='none'; }}>
+              {t.icon}
               {t.label}
             </button>
           ))}
         </nav>
-        <div style={{ padding:'12px 10px', borderTop:'1px solid rgba(255,255,255,.07)', display:'flex', flexDirection:'column', gap:'6px' }}>
-          <button className="btn btn-ghost btn-sm" style={{ justifyContent:'center' }} onClick={exportCSV}>⬇ CSV</button>
-          <button className="btn btn-green btn-sm" style={{ justifyContent:'center' }} onClick={exportGS}>📊 Google Sheets</button>
+
+        {/* Export */}
+        <div style={{ padding:'12px', borderTop:'1px solid var(--border)' }}>
+          <button className="btn btn-ghost btn-sm" style={{ width:'100%', justifyContent:'center' }} onClick={exportCSV}>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+            Exporter CSV
+          </button>
         </div>
       </aside>
 
@@ -319,7 +335,6 @@ export default function CampaignPage() {
                   </button>
                 )}
                 <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ CSV</button>
-                <button className="btn btn-green btn-sm" onClick={exportGS}>📊 Google Sheets</button>
               </div>
             </div>
 
@@ -398,7 +413,7 @@ export default function CampaignPage() {
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px' }}>
               <h2 style={{ fontSize:'16px', fontWeight:'800' }}>✉️ Séquences ({sequences.length})</h2>
               <div style={{ display:'flex', gap:'6px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ Export CSV complet</button>
+                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ Export CSV</button>
               </div>
             </div>
             {!sequences.length ? (
