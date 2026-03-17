@@ -135,7 +135,7 @@ export default function AdminPage() {
         {/* STATS TAB */}
         {tab === 'stats' && (
           <div>
-            <h1 style={{ fontSize:'20px', fontWeight:'800', marginBottom:'4px' }}>📊 Tableau de bord</h1>
+            <h1 style={{ fontSize:'20px', fontWeight:'800', marginBottom:'4px' }}>Tableau de bord</h1>
             <p style={{ fontSize:'13px', color:'var(--muted)', marginBottom:'24px' }}>Vue globale de la plateforme</p>
 
             {stats && (
@@ -195,7 +195,7 @@ export default function AdminPage() {
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'24px', flexWrap:'wrap', gap:'10px' }}>
               <div>
-                <h1 style={{ fontSize:'20px', fontWeight:'800', marginBottom:'4px' }}>👥 Freelances</h1>
+                <h1 style={{ fontSize:'20px', fontWeight:'800', marginBottom:'4px' }}>Freelances</h1>
                 <p style={{ fontSize:'13px', color:'var(--muted)' }}>{users.length} compte{users.length!==1?'s':''} enregistré{users.length!==1?'s':''}</p>
               </div>
               <button className="btn btn-primary" onClick={() => setModal('create')}>+ Créer un compte</button>
@@ -296,3 +296,4 @@ function EditUserForm({ user, onUpdate, onClose }) {
     </div>
   );
 }
+// Tue Mar 17 10:18:19 UTC 2026

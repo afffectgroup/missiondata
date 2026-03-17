@@ -98,17 +98,17 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     setMirrorCriteria(d);
-    addLog(`✅ Critères générés : ${d.job_titles?.join(', ')}`, 'ok');
+    addLog(`Critères générés : ${d.job_titles?.join(', ')}`, 'ok');
     addLog(`Secteurs directs : ${d.direct_sectors?.join(', ')}`, 'ok');
     addLog(`Secteurs indirects : ${d.indirect_sectors?.join(', ')}`, 'ok');
-    if (d.rationale) addLog(`💡 ${d.rationale}`, '');
+    if (d.rationale) addLog(d.rationale, '');
     setBusy(false);
   }
 
   // STEP 2: Search prospects
   async function runSearch() {
     if (!mirrorCriteria) { showToast('Lance d\'abord le mirroring IA.'); return; }
-    setBusy(true); addLog('🔍 Recherche Icypeas en cours…', 'inf');
+    setBusy(true); addLog('Recherche Icypeas en cours…', 'inf');
     const token = await getToken();
 
     const allSectors = [...(mirrorCriteria.direct_sectors||[]), ...(mirrorCriteria.indirect_sectors||[])];
@@ -126,7 +126,7 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     if (d.error) { addLog('❌ Erreur : ' + d.error, 'err'); setBusy(false); return; }
-    addLog(`✅ ${d.saved} prospects sauvegardés (${d.total} disponibles)`, 'ok');
+    addLog(`${d.saved} prospects sauvegardés (${d.total} disponibles)`, 'ok');
     await load();
     setBusy(false);
   }
@@ -134,8 +134,8 @@ export default function CampaignPage() {
   // STEP 3: Generate sequences
   async function runSequences() {
     if (!prospects.length) { showToast('Génère d\'abord la base de prospects.'); return; }
-    setBusy(true); addLog('✉️ Génération des séquences IA…', 'inf');
-    addLog(`⏳ ${prospects.length} séquences à générer — cela peut prendre 1–3 minutes…`);
+    setBusy(true); addLog('Génération des séquences IA…', 'inf');
+    addLog(`${prospects.length} séquences à générer — cela peut prendre 1–3 minutes…`);
     const token = await getToken();
     const r = await fetch('/api/sequences/generate', {
       method:'POST',
@@ -144,7 +144,7 @@ export default function CampaignPage() {
     });
     const d = await r.json();
     if (d.error) { addLog('❌ Erreur : ' + d.error, 'err'); setBusy(false); return; }
-    addLog(`✅ ${d.generated} séquences générées !`, 'ok');
+    addLog(`${d.generated} séquences générées !`, 'ok');
     await load();
     setTab('sequences');
     setBusy(false);
@@ -229,7 +229,7 @@ export default function CampaignPage() {
             <h1 style={{ fontSize:'18px', fontWeight:'800', marginBottom:'20px' }}>{campaign.name}</h1>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px', marginBottom:'20px' }}>
               <div className="card">
-                <div className="card-title">🏢 Client miroir</div>
+                <div className="card-title">Client miroir</div>
                 {[['Type', campaign.client_type],['Secteur',campaign.client_sector],['Taille',campaign.client_size],['Localisation',campaign.client_location],['Besoin',campaign.client_need]].filter(r=>r[1]).map(([k,v])=>(
                   <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid var(--border)', fontSize:'13px' }}>
                     <span style={{ color:'var(--muted)', fontWeight:'500' }}>{k}</span>
@@ -238,10 +238,10 @@ export default function CampaignPage() {
                 ))}
               </div>
               <div className="card">
-                <div className="card-title">💡 Cas client & résultats</div>
+                <div className="card-title">Cas client & résultats</div>
                 {campaign.freelance_result && <div style={{ fontSize:'13px', marginBottom:'10px' }}>{campaign.freelance_result}</div>}
-                {campaign.freelance_kpi && <div style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', borderRadius:'8px', padding:'8px 12px', fontSize:'13px', fontWeight:'600', marginBottom:'8px' }}>📈 {campaign.freelance_kpi}</div>}
-                {campaign.freelance_angle && <div style={{ fontSize:'12px', color:'var(--muted)' }}>✨ {campaign.freelance_angle}</div>}
+                {campaign.freelance_kpi && <div style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', borderRadius:'8px', padding:'8px 12px', fontSize:'13px', fontWeight:'600', marginBottom:'8px' }}>{campaign.freelance_kpi}</div>}
+                {campaign.freelance_angle && <div style={{ fontSize:'12px', color:'var(--muted)' }}>{campaign.freelance_angle}</div>}
               </div>
             </div>
             <div style={{ display:'flex', gap:'10px' }}>
@@ -260,14 +260,14 @@ export default function CampaignPage() {
         {/* SEARCH */}
         {tab==='search' && (
           <div>
-            <h2 style={{ fontSize:'16px', fontWeight:'800', marginBottom:'16px' }}>🔍 Génération de la base prospects</h2>
+            <h2 style={{ fontSize:'16px', fontWeight:'800', marginBottom:'16px' }}>Génération de la base prospects</h2>
 
             {/* Steps */}
             <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'20px' }}>
               {[
-                { n:1, title:'Mirroring IA', desc:'L\'IA analyse le profil client et génère les critères de ciblage (concurrents directs + indirects)', action: runMirror, label:'🪞 Lancer le mirroring', done: !!mirrorCriteria },
-                { n:2, title:'Recherche Icypeas', desc:'Génère la base de 50 prospects LinkedIn selon les critères du mirroring', action: runSearch, label:'🔍 Lancer la recherche', done: prospects.length > 0 },
-                { n:3, title:'Séquences IA', desc:'Génère 3 emails + 2 LinkedIn individualisés par prospect, basés sur ton cas client', action: runSequences, label:'✉️ Générer les séquences', done: sequences.length > 0 },
+                { n:1, title:'Mirroring IA', desc:'L\'IA analyse le profil client et génère les critères de ciblage (concurrents directs + indirects)', action: runMirror, label:'Lancer le mirroring', done: !!mirrorCriteria },
+                { n:2, title:'Recherche Icypeas', desc:'Génère la base de 50 prospects LinkedIn selon les critères du mirroring', action: runSearch, label:'Lancer la recherche', done: prospects.length > 0 },
+                { n:3, title:'Séquences IA', desc:'Génère 3 emails + 2 LinkedIn individualisés par prospect, basés sur ton cas client', action: runSequences, label:'Générer les séquences', done: sequences.length > 0 },
               ].map(step => (
                 <div key={step.n} className="card" style={{ borderLeft:`3px solid ${step.done?'var(--mf-green)':busy?'var(--mf-blue)':'var(--border)'}` }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
@@ -280,7 +280,7 @@ export default function CampaignPage() {
                     </div>
                     <button className={`btn btn-${step.done?'ghost':'primary'} btn-sm`} onClick={step.action} disabled={busy} style={{ flexShrink:0 }}>
                       {busy && !step.done ? <div className="spinner" /> : null}
-                      {step.done ? '↺ Relancer' : step.label}
+                      {step.done ? 'Relancer' : step.label}
                     </button>
                   </div>
 
@@ -293,7 +293,7 @@ export default function CampaignPage() {
                         {mirrorCriteria.direct_sectors?.map(s=><span key={s} style={{ background:'var(--mf-green-lt)', color:'var(--mf-green)', padding:'2px 8px', borderRadius:'5px', fontSize:'11px', fontWeight:'600' }}>Direct: {s}</span>)}
                         {mirrorCriteria.indirect_sectors?.map(s=><span key={s} style={{ background:'#f0ebff', color:'#7c3aed', padding:'2px 8px', borderRadius:'5px', fontSize:'11px', fontWeight:'600' }}>Indirect: {s}</span>)}
                       </div>
-                      {mirrorCriteria.rationale && <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'8px' }}>💡 {mirrorCriteria.rationale}</div>}
+                      {mirrorCriteria.rationale && <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'8px' }}>{mirrorCriteria.rationale}</div>}
                     </div>
                   )}
                 </div>
@@ -320,28 +320,28 @@ export default function CampaignPage() {
         {tab==='prospects' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px', flexWrap:'wrap', gap:'8px' }}>
-              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>👥 Base prospects ({prospects.length})</h2>
+              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>Base prospects ({prospects.length})</h2>
               <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
                 {selected.length > 0 && (
                   <button className="btn btn-primary btn-sm" onClick={runEnrich} disabled={enriching}>
-                    {enriching ? <div className="spinner" /> : '📧'}
+                    {enriching ? <div className="spinner" /> : null}
                     {enriching ? 'Lancement...' : 'Rechercher emails (' + selected.length + ')'}
                   </button>
                 )}
                 {prospects.some(p => p.icypeas_search_id && !p.email) && (
                   <button className="btn btn-green btn-sm" onClick={collectEmails} disabled={enriching}>
-                    {enriching ? <div className="spinner" /> : '📥'}
+                    {enriching ? <div className="spinner" /> : null}
                     {enriching ? 'Recuperation...' : 'Recuperer les emails (' + prospects.filter(p => p.icypeas_search_id && !p.email).length + ')'}
                   </button>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ CSV</button>
+                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
               </div>
             </div>
 
             {/* CTA or selection banner */}
             {prospects.length > 0 && selected.length === 0 && (
               <div style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:'var(--r)', padding:'10px 14px', marginBottom:'12px', fontSize:'12px', color:'#92400e', display:'flex', alignItems:'center', gap:'8px' }}>
-                <span style={{ fontSize:'16px' }}>☝️</span>
+                
                 <span>Coche les contacts pour lesquels tu veux générer les emails, puis clique sur <strong>Générer emails</strong>. Tu peux tout sélectionner en une fois avec la case en haut à gauche.</span>
               </div>
             )}
@@ -354,7 +354,7 @@ export default function CampaignPage() {
 
             {!prospects.length ? (
               <div style={{ textAlign:'center', padding:'40px', color:'var(--muted)' }}>
-                <div style={{ fontSize:'32px', marginBottom:'10px' }}>👥</div>
+                <div style={{ width:'40px', height:'40px', background:'var(--surface)', borderRadius:'10px', display:'grid', placeItems:'center', margin:'0 auto 12px' }}><svg width="20" height="20" viewBox="0 0 20 20" fill="var(--muted)"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM.458 10C1.732 7.943 4.022 7 6 7c.34 0 .672.033.993.095A4.979 4.979 0 004.667 14H2a2 2 0 01-2-2v-2zm14 0c1.274-2.057 3.564-3 5.542-3 .34 0 .672.033.993.095A4.979 4.979 0 0017.333 14H16a2 2 0 01-2-2v-2z"/></svg></div>
                 <div style={{ fontWeight:'700', marginBottom:'6px' }}>Aucun prospect</div>
                 <button className="btn btn-primary btn-sm" onClick={() => setTab('search')}>Lancer la recherche →</button>
               </div>
@@ -411,14 +411,14 @@ export default function CampaignPage() {
         {tab==='sequences' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px' }}>
-              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>✉️ Séquences ({sequences.length})</h2>
+              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>Séquences ({sequences.length})</h2>
               <div style={{ display:'flex', gap:'6px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ Export CSV</button>
+                <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
               </div>
             </div>
             {!sequences.length ? (
               <div style={{ textAlign:'center', padding:'40px', color:'var(--muted)' }}>
-                <div style={{ fontSize:'32px', marginBottom:'10px' }}>✉️</div>
+                <div style={{ width:'40px', height:'40px', background:'var(--surface)', borderRadius:'10px', display:'grid', placeItems:'center', margin:'0 auto 12px' }}><svg width="20" height="20" viewBox="0 0 20 20" fill="var(--muted)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg></div>
                 <div style={{ fontWeight:'700', marginBottom:'6px' }}>Aucune séquence</div>
                 <button className="btn btn-primary btn-sm" onClick={() => setTab('search')}>Générer les séquences →</button>
               </div>
@@ -472,7 +472,7 @@ function SequenceCard({ seq, prospect, onSave }) {
         <div style={{ borderTop:'1px solid var(--border)', padding:'18px' }}>
           {editing ? (
             <>
-              {[['email_1','📧 Email 1 — Accroche',true],['email_2','📧 Email 2 — Cas client',true],['email_3','📧 Email 3 — Relance',true],['linkedin_1','💼 LinkedIn 1 — Connexion',false],['linkedin_2','💼 LinkedIn 2 — Suivi',true]].map(([k,label,multi]) => (
+              {[['email_1','Email 1 — Accroche',true],['email_2','Email 2 — Cas client',true],['email_3','Email 3 — Relance',true],['linkedin_1','LinkedIn 1 — Connexion',false],['linkedin_2','LinkedIn 2 — Suivi',true]].map(([k,label,multi]) => (
                 <div className="field" key={k}>
                   <label>{label}</label>
                   {multi ? <textarea className="input" value={form[k]} onChange={e=>f(k,e.target.value)} rows={4} /> : <input className="input" value={form[k]} onChange={e=>f(k,e.target.value)} />}
@@ -485,7 +485,7 @@ function SequenceCard({ seq, prospect, onSave }) {
             </>
           ) : (
             <>
-              {[['email_1','📧 Email 1'],['email_2','📧 Email 2'],['email_3','📧 Email 3'],['linkedin_1','💼 LinkedIn 1'],['linkedin_2','💼 LinkedIn 2']].map(([k,label]) => seq[k] && (
+              {[['email_1','Email 1'],['email_2','Email 2'],['email_3','Email 3'],['linkedin_1','LinkedIn 1'],['linkedin_2','LinkedIn 2']].map(([k,label]) => seq[k] && (
                 <div key={k} style={{ marginBottom:'12px' }}>
                   <div style={{ fontSize:'11px', fontWeight:'700', color:'var(--muted)', marginBottom:'5px', textTransform:'uppercase', letterSpacing:'.8px' }}>{label}</div>
                   <div style={{ background:'var(--surface)', borderRadius:'8px', padding:'12px 14px', fontSize:'12px', color:'var(--text)', lineHeight:'1.65', whiteSpace:'pre-wrap', border:'1px solid var(--border)' }}>{seq[k]}</div>
@@ -499,3 +499,4 @@ function SequenceCard({ seq, prospect, onSave }) {
     </div>
   );
 }
+// Tue Mar 17 10:18:19 UTC 2026
