@@ -31,7 +31,7 @@ export default function Login() {
           {/* Logo inside card */}
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
             <div style={{ display:'flex', justifyContent:'center', margin:'0 auto 14px' }}><LogoIcon size={56} /></div>
-            <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Bienvenue sur MissionData</h1>
+            <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Bienvenue sur Mission Data</h1>
             <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Génère des prospects qualifiés en quelques clics</p>
           </div>
 

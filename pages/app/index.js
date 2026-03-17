@@ -162,7 +162,7 @@ export default function AppPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <LogoIcon size={34} />
             <div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>MissionData</div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>Mission Data</div>
               <div style={{ fontSize: '11px', color: 'var(--muted)' }}>mission-freelances.com</div>
             </div>
           </div>
