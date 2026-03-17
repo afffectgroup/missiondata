@@ -160,12 +160,10 @@ export default function AppPage() {
         {/* Logo */}
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '34px', height: '34px', background: 'var(--mf-blue)', borderRadius: '8px', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white"/></svg>
-            </div>
+            <LogoIcon size={34} />
             <div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>Mission Freelances</div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Mission Data</div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>MissionData</div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)' }}>mission-freelances.com</div>
             </div>
           </div>
         </div>
