@@ -24,19 +24,19 @@ export default function Login() {
     <div style={{ minHeight: '100vh', background: '#f4f5f7', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <div style={{ width: '100%', maxWidth: '400px' }}>
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ width: '56px', height: '56px', background: 'var(--mf-blue)', borderRadius: '14px', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
-            <svg width="28" height="28" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white"/>
-            </svg>
-          </div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Bienvenue sur MissionData</h1>
-          <p style={{ fontSize: '14px', color: 'var(--muted)' }}>Génère des prospects qualifiés en quelques clics</p>
-        </div>
-
         {/* Card */}
         <div style={{ background: 'white', borderRadius: '16px', padding: '32px', border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,.06)' }}>
+
+          {/* Logo inside card */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={{ width: '52px', height: '52px', background: 'var(--mf-blue)', borderRadius: '14px', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>
+              <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white"/>
+              </svg>
+            </div>
+            <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Bienvenue sur MissionData</h1>
+            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Génère des prospects qualifiés en quelques clics</p>
+          </div>
 
           <form onSubmit={handleLogin}>
             <div className="field">

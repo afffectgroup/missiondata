@@ -372,7 +372,7 @@ export default function CampaignPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {prospects.map((p,i) => (
+                    {[...prospects].sort((a,b) => (b.email?1:0) - (a.email?1:0)).map((p,i) => (
                       <tr key={p.id} style={{ borderBottom:'1px solid rgba(226,230,243,.5)', background: selected.includes(p.id) ? 'var(--mf-blue-lt)' : 'white' }}>
                         <td style={{ padding:'9px 12px' }}>
                           <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleSelect(p.id)} style={{ cursor:'pointer', width:'14px', height:'14px' }} />
@@ -411,7 +411,7 @@ export default function CampaignPage() {
         {tab==='sequences' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'8px' }}>
-              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>Séquences ({sequences.length})</h2>
+              <h2 style={{ fontSize:'16px', fontWeight:'800' }}>Séquences</h2>
               <div style={{ display:'flex', gap:'6px' }}>
                 <button className="btn btn-ghost btn-sm" onClick={exportCSV}>Exporter CSV</button>
               </div>
