@@ -1,3 +1,4 @@
+import { LogoIcon } from '../lib/Logo';
 // pages/login.js
 import { useState } from 'react';
 import { useRouter } from 'next/router';
@@ -29,11 +30,7 @@ export default function Login() {
 
           {/* Logo inside card */}
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <div style={{ width: '52px', height: '52px', background: 'var(--mf-blue)', borderRadius: '14px', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>
-              <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2l2.5 5.5H18l-4.5 3.5 2 6L10 13.5 4.5 17l2-6L2 7.5h5.5L10 2z" fill="white"/>
-              </svg>
-            </div>
+            <div style={{ display:'flex', justifyContent:'center', margin:'0 auto 14px' }}><LogoIcon size={56} /></div>
             <h1 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Bienvenue sur MissionData</h1>
             <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Génère des prospects qualifiés en quelques clics</p>
           </div>

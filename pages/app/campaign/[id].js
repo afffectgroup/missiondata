@@ -1,3 +1,4 @@
+import { LogoIcon } from '../../../lib/Logo';
 // pages/app/campaign/[id].js
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';

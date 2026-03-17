@@ -44,7 +44,8 @@ export default function App({ Component, pageProps }) {
   return (
     <AuthContext.Provider value={{ session, profile, loading, signOut }}>
       <Head>
-        <title>Mission Data</title>
+        <title>MissionData</title>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </Head>
