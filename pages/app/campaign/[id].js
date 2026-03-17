@@ -76,8 +76,18 @@ export default function CampaignPage() {
       setCampaign(d.campaign);
       setProspects(d.prospects||[]);
       setSequences(d.sequences||[]);
-      if (d.campaign.mirror_criteria) setMirrorCriteria(d.campaign.mirror_criteria);
-      if (d.campaign.selected_titles) setSelectedTitles(d.campaign.selected_titles);
+      // selected_titles: null = first time (pre-select all), [] = user cleared all, [...] = user choice
+      if (d.campaign.selected_titles !== null && d.campaign.selected_titles !== undefined) {
+        setSelectedTitles(d.campaign.selected_titles);
+      } else {
+        // First visit: pre-select all sector titles
+        const sectorTitles = JOB_TITLES_BY_SECTOR[d.campaign.client_sector] || JOB_TITLES_BY_SECTOR.default;
+        const initTitles = [...sectorTitles];
+        if (d.campaign.job_title_target && !initTitles.includes(d.campaign.job_title_target)) {
+          initTitles.push(d.campaign.job_title_target);
+        }
+        setSelectedTitles(initTitles);
+      }
     }
   }
 
@@ -89,18 +99,20 @@ export default function CampaignPage() {
   function addLog(msg, type='') { setLog(p => [...p, { msg, type, ts: new Date().toLocaleTimeString() }]); }
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
+  async function saveTitles(titles) {
+    const token = await getToken();
+    await fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_titles: titles }),
+    });
+  }
+
   // STEP 2: Search prospects
   async function runSearch() {
     if (!selectedTitles.length) { showToast('Sélectionne au moins un poste.'); return; }
     setBusy(true); addLog('Recherche Icypeas en cours…', 'inf');
     const token = await getToken();
-
-    // Persist selected titles
-    await fetch(`/api/campaigns/${id}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selected_titles: selectedTitles }),
-    });
 
     const query = {
       currentJobTitle: { include: selectedTitles },
@@ -258,13 +270,19 @@ export default function CampaignPage() {
             <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'20px' }}>
 
               {/* STEP 1: Select job titles */}
-              <div className="card" style={{ borderLeft:`3px solid ${selectedTitles.length ? 'var(--mf-green)' : 'var(--border)'}` }}>
+              <div className="card" style={{ borderLeft:`3px solid ${selectedTitles.length ? 'var(--mf-green)' : 'var(--mf-blue)'}` }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'12px', flex:1 }}>
                     <div style={{ width:'32px', height:'32px', borderRadius:'8px', background: selectedTitles.length ? 'var(--mf-green-lt)' : 'var(--mf-blue-lt)', display:'grid', placeItems:'center', fontWeight:'800', color: selectedTitles.length ? 'var(--mf-green)' : 'var(--mf-blue)', flexShrink:0, fontSize:'14px' }}>{selectedTitles.length ? '✓' : '1'}</div>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'8px' }}>Postes ciblés</div>
-                      <JobTitleSelector selected={selectedTitles} onChange={setSelectedTitles} sector={campaign.client_sector} />
+                      <div style={{ fontSize:'14px', fontWeight:'600', marginBottom:'4px' }}>Postes ciblés</div>
+                      {selectedTitles.length === 0 && (
+                        <div style={{ display:'flex', alignItems:'center', gap:'8px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'var(--r)', padding:'8px 12px', marginBottom:'10px', fontSize:'12px', color:'#92400e' }}>
+                          <svg width="14" height="14" viewBox="0 0 20 20" fill="#f59e0b" style={{ flexShrink:0 }}><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                          <span><strong>Sélectionne au moins un poste</strong> en cliquant sur les chips ci-dessous — ou ajoute un poste personnalisé. La recherche ne démarre pas sans sélection.</span>
+                        </div>
+                      )}
+                      <JobTitleSelector selected={selectedTitles} onChange={(titles) => { setSelectedTitles(titles); saveTitles(titles); }} sector={campaign.client_sector} />
                     </div>
                   </div>
                 </div>
@@ -567,6 +585,7 @@ function JobTitleSelector({ selected, onChange, sector }) {
 
   return (
     <div>
+      <p style={{ fontSize:'12px', color:'var(--muted)', marginBottom:'8px' }}>Clique pour sélectionner ou désélectionner un poste. Tu peux aussi en ajouter un personnalisé.</p>
       {/* Pre-defined chips */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'8px' }}>
         {titles.map(t => (
