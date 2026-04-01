@@ -8,39 +8,28 @@ export default async function handler(req, res) {
 
   const { id } = req.query;
 
-  // GET — count reserve prospects with email
   if (req.method === 'GET') {
     const { data } = await supabaseAdmin
-      .from('prospects')
-      .select('id')
-      .eq('campaign_id', id)
-      .eq('reserve', true)
-      .not('email', 'is', null)
-      .neq('email', '');
+      .from('prospects').select('id')
+      .eq('campaign_id', id).eq('reserve', true)
+      .not('email', 'is', null).neq('email', '');
     return res.status(200).json({ count: data?.length || 0 });
   }
 
-  // POST — reveal reserve prospects with email
   if (req.method === 'POST') {
     const { data: reserves } = await supabaseAdmin
-      .from('prospects')
-      .select('id')
-      .eq('campaign_id', id)
-      .eq('reserve', true)
-      .not('email', 'is', null)
-      .neq('email', '');
+      .from('prospects').select('id')
+      .eq('campaign_id', id).eq('reserve', true)
+      .not('email', 'is', null).neq('email', '');
 
     if (!reserves?.length) return res.status(200).json({ ok: true, revealed: 0 });
 
     const ids = reserves.map(p => p.id);
     await supabaseAdmin.from('prospects').update({ reserve: false }).in('id', ids);
 
-    // Update campaign prospects_count
     const { data: all } = await supabaseAdmin
-      .from('prospects')
-      .select('id')
-      .eq('campaign_id', id)
-      .eq('reserve', false);
+      .from('prospects').select('id')
+      .eq('campaign_id', id).eq('reserve', false);
 
     await supabaseAdmin.from('campaigns').update({
       prospects_count: all?.length || 0,
