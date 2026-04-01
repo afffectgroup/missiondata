@@ -23,6 +23,8 @@ export default function CampaignPage() {
   const [reserveWithEmail, setReserveWithEmail] = useState(0);
   const [polling, setPolling] = useState(false);
   const [showSeqWizard, setShowSeqWizard] = useState(false);
+  const [feLoading, setFeLoading] = useState({}); // { [prospectId]: 'email'|'phone'|'both' }
+  const [fePopover, setFePopover] = useState(null); // prospectId with open popover
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState('');
 
@@ -83,6 +85,13 @@ export default function CampaignPage() {
   }
 
   useEffect(() => { if (!loading && !profile) router.push('/login'); }, [loading, profile]);
+
+  // Close Fullenrich popover on outside click
+  useEffect(() => {
+    function handleClick() { setFePopover(null); }
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
   useEffect(() => { if (id && profile) load(); }, [id, profile]);
 
   // Auto-poll every 30s
@@ -185,6 +194,40 @@ export default function CampaignPage() {
     await load();
     setTab('sequences');
     setBusy(false);
+  }
+
+  async function fullenrichSubmit(prospectId, field) {
+    setFePopover(null);
+    setFeLoading(p => ({ ...p, [prospectId]: field }));
+    const token = await getToken();
+    const r = await fetch('/api/prospects/fullenrich', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prospect_id: prospectId, action: 'submit', field }),
+    });
+    const d = await r.json();
+    if (d.error) { showToast('Erreur Fullenrich : ' + d.error); setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; }); return; }
+    showToast('Enrichissement lancé — résultat dans ~30-60s');
+    // Poll every 10s
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 12) { clearInterval(poll); setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; }); showToast('Délai dépassé — réessaie dans quelques minutes'); return; }
+      const r2 = await fetch('/api/prospects/fullenrich', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospect_id: prospectId, action: 'collect' }),
+      });
+      const d2 = await r2.json();
+      if (d2.pending) return;
+      clearInterval(poll);
+      setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; });
+      if (d2.not_found) { showToast('Aucun résultat trouvé via Fullenrich'); return; }
+      if (d2.error) { showToast('Erreur : ' + d2.error); return; }
+      const msg = [d2.email && '✓ Email trouvé', d2.mobile && '✓ Mobile trouvé'].filter(Boolean).join(' · ');
+      showToast(msg || 'Enrichissement terminé');
+      await load();
+    }, 10000);
   }
 
   function exportCSV() {
@@ -497,7 +540,7 @@ export default function CampaignPage() {
                       <th style={{ padding: '9px 12px', width: '36px' }}>
                         <input type="checkbox" checked={selected.length === visibleProspects.length && visibleProspects.length > 0} onChange={toggleAll} style={{ cursor: 'pointer', width: '14px', height: '14px' }} />
                       </th>
-                      {['Nom', 'Poste', 'Entreprise', 'Email', 'Score', 'LinkedIn', ''].map(h => (
+                      {['Nom', 'Poste', 'Entreprise', 'Email', 'Mobile', 'Score', 'LinkedIn', ''].map(h => (
                         <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: '9px', fontWeight: '700', letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -510,20 +553,62 @@ export default function CampaignPage() {
                         <td style={{ padding: '9px 12px', color: 'var(--text2)', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.job_title || '—'}</td>
                         <td style={{ padding: '9px 12px', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.company || '—'}</td>
                         <td style={{ padding: '9px 12px', fontFamily: 'JetBrains Mono,monospace', fontSize: '11px' }}>
-                          {p.email
-                            ? <span style={{ color: 'var(--mf-blue)', fontWeight: '600' }}>{p.email}</span>
-                            : p.email_cert === 'not_found'
-                              ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', color:'#ef4444', fontSize:'11px' }}>
-                                  <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/></svg>
-                                  Non trouvé
-                                </span>
-                              : p.icypeas_search_id
+                          <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                            {p.email
+                              ? <span style={{ color: 'var(--mf-blue)', fontWeight: '600' }}>{p.email}</span>
+                              : p.icypeas_search_id && !p.email_cert
                                 ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', color:'var(--muted)', fontSize:'11px' }}>
                                     <div className="spinner spinner-dark" style={{ width:'10px', height:'10px', borderWidth:'1.5px' }} />
                                     En cours...
                                   </span>
-                                : <span style={{ color:'var(--muted)' }}>—</span>
-                          }
+                                : <span style={{ color:'var(--muted)', fontSize:'11px' }}>
+                                    {p.email_cert === 'not_found' ? <span style={{ color:'#ef4444' }}>❌ Non trouvé</span> : '—'}
+                                  </span>
+                            }
+                            {/* Fullenrich CTA — show when no email */}
+                            {!p.email && (
+                              <div style={{ position:'relative' }}>
+                                {feLoading[p.id] ? (
+                                  <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', fontSize:'10px', color:'#7c3aed', background:'#f0ebff', padding:'2px 6px', borderRadius:'4px' }}>
+                                    <div className="spinner" style={{ width:'8px', height:'8px', borderWidth:'1.5px', borderColor:'#7c3aed', borderTopColor:'transparent' }} />
+                                    {feLoading[p.id] === 'email' ? 'Email...' : feLoading[p.id] === 'phone' ? 'Mobile...' : 'Enrichissement...'}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <button onClick={() => setFePopover(fePopover === p.id ? null : p.id)}
+                                      style={{ fontSize:'10px', padding:'2px 7px', borderRadius:'4px', border:'1px solid #7c3aed', background:'white', color:'#7c3aed', cursor:'pointer', fontFamily:'inherit', fontWeight:'600', whiteSpace:'nowrap' }}
+                                      title="Enrichir via Fullenrich">
+                                      ✦ Fullenrich
+                                    </button>
+                                    {fePopover === p.id && (
+                                      <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'white', border:'1px solid var(--border)', borderRadius:'var(--r)', boxShadow:'var(--shadow)', zIndex:100, padding:'8px', minWidth:'160px' }}>
+                                        <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'6px', fontWeight:'600' }}>Enrichir via Fullenrich</div>
+                                        {[
+                                          { field:'email', label:'📧 Email seulement', desc:'~5ct si trouvé' },
+                                          { field:'phone', label:'📱 Mobile seulement', desc:'~5ct si trouvé' },
+                                          { field:'both', label:'📧📱 Email + Mobile', desc:'~10ct si trouvé' },
+                                        ].map(opt => (
+                                          <button key={opt.field} onClick={() => fullenrichSubmit(p.id, opt.field)}
+                                            style={{ display:'flex', flexDirection:'column', width:'100%', padding:'6px 8px', borderRadius:'4px', border:'none', background:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}
+                                            onMouseOver={e => e.currentTarget.style.background='var(--surface)'}
+                                            onMouseOut={e => e.currentTarget.style.background='none'}>
+                                            <span style={{ fontSize:'12px', fontWeight:'500' }}>{opt.label}</span>
+                                            <span style={{ fontSize:'10px', color:'var(--muted)' }}>{opt.desc}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        {/* Mobile */}
+                        <td style={{ padding: '9px 12px', fontFamily: 'JetBrains Mono,monospace', fontSize: '11px' }}>
+                          {p.mobile
+                            ? <span style={{ color:'#7c3aed', fontWeight:'600' }}>{p.mobile}</span>
+                            : <span style={{ color:'var(--muted)' }}>—</span>}
                         </td>
                         <td style={{ padding: '9px 12px' }}>{p.email_cert ? <span style={{ background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{p.email_cert}</span> : '—'}</td>
                         <td style={{ padding: '9px 12px' }}>{p.linkedin_url ? <a href={p.linkedin_url} target="_blank" rel="noopener" style={{ color: 'var(--mf-blue)', fontWeight: '600', fontSize: '12px' }}>↗</a> : '—'}</td>
