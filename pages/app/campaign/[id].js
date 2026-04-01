@@ -23,6 +23,21 @@ export default function CampaignPage() {
   const [reserveWithEmail, setReserveWithEmail] = useState(0);
   const [polling, setPolling] = useState(false);
   const [showSeqWizard, setShowSeqWizard] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal] = useState('');
+
+  async function saveName() {
+    if (!nameVal.trim()) { setEditingName(false); return; }
+    const token = await getToken();
+    await fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nameVal.trim() }),
+    });
+    showToast('Dossier renommé ✓');
+    setEditingName(false);
+    await load();
+  }
 
   // Advanced filters
   const [filters, setFilters] = useState({
@@ -202,7 +217,21 @@ export default function CampaignPage() {
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd"/></svg>
             Mes dossiers
           </button>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '6px' }}>{campaign.name}</div>
+          {editingName ? (
+            <div style={{ display:'flex', gap:'4px', marginBottom:'6px' }}>
+              <input className="input" value={nameVal} onChange={e => setNameVal(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+                autoFocus style={{ fontSize:'12px', padding:'4px 8px', flex:1 }} />
+              <button onClick={saveName} className="btn btn-primary btn-sm" style={{ padding:'4px 8px', fontSize:'11px' }}>✓</button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'6px', cursor:'pointer' }}
+              onClick={() => { setNameVal(campaign.name); setEditingName(true); }}
+              title="Cliquer pour renommer">
+              <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{campaign.name}</div>
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="var(--muted)" style={{ flexShrink:0 }}><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+            </div>
+          )}
           <span className={`badge badge-${campaign.status === 'done' ? 'green' : campaign.status === 'generating' ? 'blue' : 'muted'}`} style={{ fontSize: '11px' }}>
             {campaign.status === 'done' ? 'Terminé' : campaign.status === 'generating' ? 'En cours' : 'Brouillon'}
           </span>
@@ -231,7 +260,14 @@ export default function CampaignPage() {
         {/* OVERVIEW */}
         {tab === 'overview' && (
           <div>
-            <h1 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>{campaign.name}</h1>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px' }}>
+              <h1 style={{ fontSize: '18px', fontWeight: '700', margin:0 }}>{campaign.name}</h1>
+              <button onClick={() => { setNameVal(campaign.name); setEditingName(true); }} title="Renommer"
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', padding:'4px', borderRadius:'4px' }}
+                onMouseOver={e => e.currentTarget.style.color='var(--text)'} onMouseOut={e => e.currentTarget.style.color='var(--muted)'}>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+              </button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
               <div className="card">
                 <div className="card-title">Ciblage</div>
@@ -408,9 +444,21 @@ export default function CampaignPage() {
         {tab === 'prospects' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
                 Base prospects ({visibleProspects.length})
-                {polling && <span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: '400', marginLeft: '10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}><div className="spinner spinner-dark" /> Emails en cours...</span>}
+                {visibleProspects.length > 0 && (() => {
+                  const found = visibleProspects.filter(p => p.email).length;
+                  const notFound = visibleProspects.filter(p => p.email_cert === 'not_found').length;
+                  const pending = visibleProspects.filter(p => p.icypeas_search_id && !p.email && p.email_cert !== 'not_found').length;
+                  const pct = Math.round((found / visibleProspects.length) * 100);
+                  return (
+                    <span style={{ fontSize:'12px', fontWeight:'500', display:'inline-flex', alignItems:'center', gap:'8px' }}>
+                      <span style={{ color:'var(--mf-blue)' }}>✉ {found}/{visibleProspects.length} emails ({pct}%)</span>
+                      {notFound > 0 && <span style={{ color:'#ef4444' }}>· {notFound} non trouvé{notFound > 1 ? 's' : ''}</span>}
+                      {polling && <span style={{ color:'var(--muted)', display:'inline-flex', alignItems:'center', gap:'4px' }}><div className="spinner spinner-dark" style={{ width:'10px', height:'10px', borderWidth:'1.5px' }} /> {pending} en cours</span>}
+                    </span>
+                  );
+                })()}
               </h2>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {reserveWithEmail > 0 && <button className="btn btn-primary btn-sm" onClick={generateMore}>+ Générer plus ({reserveWithEmail} avec email)</button>}
@@ -462,7 +510,20 @@ export default function CampaignPage() {
                         <td style={{ padding: '9px 12px', color: 'var(--text2)', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.job_title || '—'}</td>
                         <td style={{ padding: '9px 12px', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.company || '—'}</td>
                         <td style={{ padding: '9px 12px', fontFamily: 'JetBrains Mono,monospace', fontSize: '11px' }}>
-                          {p.email ? <span style={{ color: 'var(--mf-blue)', fontWeight: '600' }}>{p.email}</span> : p.icypeas_search_id ? <span style={{ color: 'var(--muted)' }}>⏳ en cours...</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                          {p.email
+                            ? <span style={{ color: 'var(--mf-blue)', fontWeight: '600' }}>{p.email}</span>
+                            : p.email_cert === 'not_found'
+                              ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', color:'#ef4444', fontSize:'11px' }}>
+                                  <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/></svg>
+                                  Non trouvé
+                                </span>
+                              : p.icypeas_search_id
+                                ? <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', color:'var(--muted)', fontSize:'11px' }}>
+                                    <div className="spinner spinner-dark" style={{ width:'10px', height:'10px', borderWidth:'1.5px' }} />
+                                    En cours...
+                                  </span>
+                                : <span style={{ color:'var(--muted)' }}>—</span>
+                          }
                         </td>
                         <td style={{ padding: '9px 12px' }}>{p.email_cert ? <span style={{ background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{p.email_cert}</span> : '—'}</td>
                         <td style={{ padding: '9px 12px' }}>{p.linkedin_url ? <a href={p.linkedin_url} target="_blank" rel="noopener" style={{ color: 'var(--mf-blue)', fontWeight: '600', fontSize: '12px' }}>↗</a> : '—'}</td>
