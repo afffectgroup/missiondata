@@ -156,7 +156,12 @@ export default function CampaignPage() {
     const r = await fetch('/api/prospects/search', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaign_id: id, query, limit: searchLimit || campaign.prospect_limit || 10 }),
+      body: JSON.stringify({
+        campaign_id: id,
+        query,
+        limit: searchLimit || campaign.prospect_limit || 10,
+        offset: Math.floor(Math.random() * 5) * (searchLimit || campaign.prospect_limit || 10),
+      }),
     });
     const d = await r.json();
     if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur Source 1 : ' + d.error); setBusy(false); return; }
