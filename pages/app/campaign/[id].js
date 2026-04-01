@@ -124,11 +124,14 @@ export default function CampaignPage() {
       setProspects(d.prospects || []);
       setSequences(d.sequences || []);
       setSelectedTitles(d.campaign.selected_titles || []);
-      // Always sync filters from DB to prevent state drift on tab switch
+      // Sync filters: prefer DB, fallback to localStorage
+      const cachedFilters = (() => {
+        try { return JSON.parse(localStorage.getItem(`filters_${id}`) || '{}'); } catch { return {}; }
+      })();
       setFilters(f => ({
         ...f,
-        sector: d.campaign.client_sector || '',
-        location: d.campaign.client_location || '',
+        sector: d.campaign.client_sector || cachedFilters.sector || '',
+        location: d.campaign.client_location || cachedFilters.location || '',
       }));
     }
   }
