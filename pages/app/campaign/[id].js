@@ -310,7 +310,7 @@ export default function CampaignPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text2)', marginBottom: '6px' }}>Localisation</div>
-                    <input className="input" value={filters.location} onChange={e => setFilters(f => ({ ...f, location: e.target.value }))} placeholder="Ex : Paris, Lyon..." style={{ fontSize: '12px' }} />
+                    <LocationSelect value={filters.location} onChange={v => setFilters(f => ({ ...f, location: v }))} />
                   </div>
                 </div>
 
@@ -655,32 +655,257 @@ function SingleSequenceCard({ label, type, content: initialContent, onSave }) {
   );
 }
 
+// ─── LOCATION SELECT ─────────────────────────────────────────────────────────
+const LOCATIONS = [
+  // Pays
+  { group: 'Pays', v: 'FR', l: '🇫🇷 France' },
+  { group: 'Pays', v: 'BE', l: '🇧🇪 Belgique' },
+  { group: 'Pays', v: 'CH', l: '🇨🇭 Suisse' },
+  { group: 'Pays', v: 'LU', l: '🇱🇺 Luxembourg' },
+  { group: 'Pays', v: 'DE', l: '🇩🇪 Allemagne' },
+  { group: 'Pays', v: 'ES', l: '🇪🇸 Espagne' },
+  { group: 'Pays', v: 'IT', l: '🇮🇹 Italie' },
+  { group: 'Pays', v: 'GB', l: '🇬🇧 Royaume-Uni' },
+  { group: 'Pays', v: 'NL', l: '🇳🇱 Pays-Bas' },
+  { group: 'Pays', v: 'US', l: '🇺🇸 États-Unis' },
+  { group: 'Pays', v: 'CA', l: '🇨🇦 Canada' },
+  // Grandes villes françaises
+  { group: 'Villes', v: 'Paris', l: '📍 Paris' },
+  { group: 'Villes', v: 'Lyon', l: '📍 Lyon' },
+  { group: 'Villes', v: 'Marseille', l: '📍 Marseille' },
+  { group: 'Villes', v: 'Bordeaux', l: '📍 Bordeaux' },
+  { group: 'Villes', v: 'Lille', l: '📍 Lille' },
+  { group: 'Villes', v: 'Nantes', l: '📍 Nantes' },
+  { group: 'Villes', v: 'Toulouse', l: '📍 Toulouse' },
+  { group: 'Villes', v: 'Strasbourg', l: '📍 Strasbourg' },
+  { group: 'Villes', v: 'Rennes', l: '📍 Rennes' },
+  { group: 'Villes', v: 'Nice', l: '📍 Nice' },
+  { group: 'Villes', v: 'Montpellier', l: '📍 Montpellier' },
+  { group: 'Villes', v: 'Grenoble', l: '📍 Grenoble' },
+  { group: 'Villes', v: 'Rouen', l: '📍 Rouen' },
+  { group: 'Villes', v: 'Dijon', l: '📍 Dijon' },
+  { group: 'Villes', v: 'Metz', l: '📍 Metz' },
+  { group: 'Villes', v: 'Reims', l: '📍 Reims' },
+  { group: 'Villes', v: 'Tours', l: '📍 Tours' },
+  { group: 'Villes', v: 'Clermont-Ferrand', l: '📍 Clermont-Ferrand' },
+  { group: 'Villes', v: 'Aix-en-Provence', l: '📍 Aix-en-Provence' },
+  { group: 'Villes', v: 'Angers', l: '📍 Angers' },
+  // Régions françaises
+  { group: 'Régions', v: 'Île-de-France', l: '🗺 Île-de-France' },
+  { group: 'Régions', v: 'Auvergne-Rhône-Alpes', l: '🗺 Auvergne-Rhône-Alpes' },
+  { group: 'Régions', v: 'Nouvelle-Aquitaine', l: '🗺 Nouvelle-Aquitaine' },
+  { group: 'Régions', v: 'Occitanie', l: '🗺 Occitanie' },
+  { group: 'Régions', v: 'Hauts-de-France', l: '🗺 Hauts-de-France' },
+  { group: 'Régions', v: 'Grand Est', l: '🗺 Grand Est' },
+  { group: 'Régions', v: 'Pays de la Loire', l: '🗺 Pays de la Loire' },
+  { group: 'Régions', v: 'Normandie', l: '🗺 Normandie' },
+  { group: 'Régions', v: 'Bretagne', l: '🗺 Bretagne' },
+  { group: 'Régions', v: "Provence-Alpes-Côte d'Azur", l: "🗺 Provence-Alpes-Côte d'Azur" },
+  { group: 'Régions', v: 'Bourgogne-Franche-Comté', l: '🗺 Bourgogne-Franche-Comté' },
+  { group: 'Régions', v: 'Centre-Val de Loire', l: '🗺 Centre-Val de Loire' },
+  { group: 'Régions', v: 'Corse', l: '🗺 Corse' },
+];
+
+function LocationSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+  const selected = LOCATIONS.find(l => l.v === value);
+  const filtered = LOCATIONS.filter(l => l.l.toLowerCase().includes(search.toLowerCase()));
+  const groups = ['Pays', 'Villes', 'Régions'];
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div className="input" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }} onClick={() => setOpen(!open)}>
+        <span style={{ color: selected ? 'var(--text)' : 'var(--muted)' }}>{selected ? selected.l : 'Choisir...'}</span>
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--r)', zIndex: 200, boxShadow: 'var(--shadow)' }}>
+          <div style={{ padding: '6px' }}>
+            <input className="input" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} autoFocus style={{ marginBottom: 0, fontSize: '12px' }} />
+          </div>
+          <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+            {value && <div onClick={() => { onChange(''); setOpen(false); setSearch(''); }} style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--muted)', borderBottom: '1px solid var(--border)' }}>— Aucun filtre —</div>}
+            {groups.map(group => {
+              const items = filtered.filter(l => l.group === group);
+              if (!items.length) return null;
+              return (
+                <div key={group}>
+                  <div style={{ padding: '5px 10px 3px', fontSize: '10px', fontWeight: '700', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px', background: 'var(--surface)' }}>{group}</div>
+                  {items.map(l => (
+                    <div key={l.v} onClick={() => { onChange(l.v); setOpen(false); setSearch(''); }}
+                      style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', background: value === l.v ? 'var(--mf-blue-lt)' : 'white', color: value === l.v ? 'var(--mf-blue)' : 'var(--text)', fontWeight: value === l.v ? '600' : '400' }}
+                      onMouseOver={e => { if (value !== l.v) e.currentTarget.style.background = 'var(--surface)'; }}
+                      onMouseOut={e => { if (value !== l.v) e.currentTarget.style.background = 'white'; }}>
+                      {l.l}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── SECTOR SEARCH ───────────────────────────────────────────────────────────
 const SECTORS = [
-  {v:"Accounting",l:"Accounting — Expertise comptable"},{v:"Airlines/Aviation",l:"Airlines / Aviation"},
-  {v:"Architecture & Planning",l:"Architecture & Planning"},{v:"Automotive",l:"Automotive — Automobile"},
-  {v:"Banking",l:"Banking — Banque"},{v:"Biotechnology",l:"Biotechnology"},
-  {v:"Computer Software",l:"Computer Software — Logiciels"},{v:"Construction",l:"Construction — BTP"},
-  {v:"Consumer Goods",l:"Consumer Goods"},{v:"Design",l:"Design"},
+  {v:"Accounting",l:"Accounting — Expertise comptable"},
+  {v:"Airlines/Aviation",l:"Airlines/Aviation — Aviation"},
+  {v:"Alternative Dispute Resolution",l:"Alternative Dispute Resolution"},
+  {v:"Alternative Medicine",l:"Alternative Medicine — Médecine alternative"},
+  {v:"Animation",l:"Animation"},
+  {v:"Apparel & Fashion",l:"Apparel & Fashion — Mode"},
+  {v:"Architecture & Planning",l:"Architecture & Planning — Architecture"},
+  {v:"Arts and Crafts",l:"Arts and Crafts — Arts & Artisanat"},
+  {v:"Automotive",l:"Automotive — Automobile"},
+  {v:"Aviation & Aerospace",l:"Aviation & Aerospace — Aérospatiale"},
+  {v:"Banking",l:"Banking — Banque"},
+  {v:"Biotechnology",l:"Biotechnology — Biotechnologie"},
+  {v:"Broadcast Media",l:"Broadcast Media — Médias"},
+  {v:"Building Materials",l:"Building Materials — Matériaux de construction"},
+  {v:"Business Supplies and Equipment",l:"Business Supplies and Equipment"},
+  {v:"Capital Markets",l:"Capital Markets — Marchés financiers"},
+  {v:"Chemicals",l:"Chemicals — Chimie"},
+  {v:"Civic & Social Organization",l:"Civic & Social Organization"},
+  {v:"Civil Engineering",l:"Civil Engineering — Génie civil"},
+  {v:"Commercial Real Estate",l:"Commercial Real Estate — Immobilier commercial"},
+  {v:"Computer & Network Security",l:"Computer & Network Security — Cybersécurité"},
+  {v:"Computer Games",l:"Computer Games — Jeux vidéo"},
+  {v:"Computer Hardware",l:"Computer Hardware — Matériel informatique"},
+  {v:"Computer Networking",l:"Computer Networking — Réseaux"},
+  {v:"Computer Software",l:"Computer Software — Logiciels"},
+  {v:"Construction",l:"Construction — BTP"},
+  {v:"Consumer Electronics",l:"Consumer Electronics — Électronique grand public"},
+  {v:"Consumer Goods",l:"Consumer Goods — Biens de consommation"},
+  {v:"Consumer Services",l:"Consumer Services — Services aux particuliers"},
+  {v:"Cosmetics",l:"Cosmetics — Cosmétique"},
+  {v:"Dairy",l:"Dairy — Produits laitiers"},
+  {v:"Defense & Space",l:"Defense & Space — Défense & Spatial"},
+  {v:"Design",l:"Design"},
+  {v:"E-Learning",l:"E-Learning — Formation en ligne"},
+  {v:"Education Management",l:"Education Management — Éducation"},
+  {v:"Electrical/Electronic Manufacturing",l:"Electrical/Electronic Manufacturing — Électronique"},
+  {v:"Entertainment",l:"Entertainment — Divertissement"},
+  {v:"Environmental Services",l:"Environmental Services — Environnement"},
+  {v:"Events Services",l:"Events Services — Événementiel"},
+  {v:"Executive Office",l:"Executive Office — Direction générale"},
+  {v:"Facilities Services",l:"Facilities Services — Services aux entreprises"},
+  {v:"Farming",l:"Farming — Agriculture"},
   {v:"Financial Services",l:"Financial Services — Services financiers"},
-  {v:"Food & Beverages",l:"Food & Beverages"},{v:"Health, Wellness and Fitness",l:"Health & Wellness"},
-  {v:"Higher Education",l:"Higher Education"},{v:"Hospital & Health Care",l:"Hospital & Health Care"},
-  {v:"Hospitality",l:"Hospitality — Hôtellerie"},{v:"Human Resources",l:"Human Resources — RH"},
-  {v:"Information Technology and Services",l:"Information Technology — IT"},
-  {v:"Insurance",l:"Insurance — Assurance"},{v:"Internet",l:"Internet"},
-  {v:"Investment Management",l:"Investment Management"},{v:"Law Practice",l:"Law Practice — Juridique"},
-  {v:"Logistics and Supply Chain",l:"Logistics — Logistique"},
-  {v:"Management Consulting",l:"Management Consulting — Conseil"},
-  {v:"Manufacturing",l:"Manufacturing — Industrie"},
-  {v:"Marketing and Advertising",l:"Marketing and Advertising"},
-  {v:"Media Production",l:"Media Production"},{v:"Pharmaceuticals",l:"Pharmaceuticals"},
-  {v:"Professional Training & Coaching",l:"Professional Training — Formation"},
-  {v:"Public Relations and Communications",l:"Public Relations — Communication"},
+  {v:"Fine Art",l:"Fine Art — Beaux-arts"},
+  {v:"Fishery",l:"Fishery — Pêche"},
+  {v:"Food & Beverages",l:"Food & Beverages — Alimentation & Boissons"},
+  {v:"Food Production",l:"Food Production — Production alimentaire"},
+  {v:"Fund-Raising",l:"Fund-Raising — Collecte de fonds"},
+  {v:"Furniture",l:"Furniture — Mobilier"},
+  {v:"Gambling & Casinos",l:"Gambling & Casinos"},
+  {v:"Glass, Ceramics & Concrete",l:"Glass, Ceramics & Concrete"},
+  {v:"Government Administration",l:"Government Administration — Administration publique"},
+  {v:"Government Relations",l:"Government Relations — Relations gouvernementales"},
+  {v:"Graphic Design",l:"Graphic Design — Design graphique"},
+  {v:"Health, Wellness and Fitness",l:"Health, Wellness and Fitness — Santé & Bien-être"},
+  {v:"Higher Education",l:"Higher Education — Enseignement supérieur"},
+  {v:"Hospital & Health Care",l:"Hospital & Health Care — Hôpital & Santé"},
+  {v:"Hospitality",l:"Hospitality — Hôtellerie & Restauration"},
+  {v:"Human Resources",l:"Human Resources — Ressources humaines"},
+  {v:"Import and Export",l:"Import and Export — Import/Export"},
+  {v:"Individual & Family Services",l:"Individual & Family Services — Services à la personne"},
+  {v:"Industrial Automation",l:"Industrial Automation — Automatisation industrielle"},
+  {v:"Information Services",l:"Information Services — Services d'information"},
+  {v:"Information Technology and Services",l:"Information Technology and Services — IT"},
+  {v:"Insurance",l:"Insurance — Assurance"},
+  {v:"International Affairs",l:"International Affairs — Affaires internationales"},
+  {v:"International Trade and Development",l:"International Trade and Development"},
+  {v:"Internet",l:"Internet"},
+  {v:"Investment Banking",l:"Investment Banking — Banque d'investissement"},
+  {v:"Investment Management",l:"Investment Management — Gestion d'investissements"},
+  {v:"Judiciary",l:"Judiciary — Justice"},
+  {v:"Law Enforcement",l:"Law Enforcement — Forces de l'ordre"},
+  {v:"Law Practice",l:"Law Practice — Cabinet juridique"},
+  {v:"Legal Services",l:"Legal Services — Services juridiques"},
+  {v:"Legislative Office",l:"Legislative Office — Législatif"},
+  {v:"Leisure, Travel & Tourism",l:"Leisure, Travel & Tourism — Tourisme"},
+  {v:"Libraries",l:"Libraries — Bibliothèques"},
+  {v:"Logistics and Supply Chain",l:"Logistics and Supply Chain — Logistique"},
+  {v:"Luxury Goods & Jewelry",l:"Luxury Goods & Jewelry — Luxe & Joaillerie"},
+  {v:"Machinery",l:"Machinery — Machines & Équipements"},
+  {v:"Management Consulting",l:"Management Consulting — Conseil en management"},
+  {v:"Maritime",l:"Maritime"},
+  {v:"Market Research",l:"Market Research — Études de marché"},
+  {v:"Marketing and Advertising",l:"Marketing and Advertising — Marketing & Publicité"},
+  {v:"Mechanical or Industrial Engineering",l:"Mechanical or Industrial Engineering — Génie industriel"},
+  {v:"Media Production",l:"Media Production — Production médias"},
+  {v:"Medical Devices",l:"Medical Devices — Dispositifs médicaux"},
+  {v:"Medical Practice",l:"Medical Practice — Cabinet médical"},
+  {v:"Mental Health Care",l:"Mental Health Care — Santé mentale"},
+  {v:"Military",l:"Military — Militaire"},
+  {v:"Mining & Metals",l:"Mining & Metals — Mines & Métaux"},
+  {v:"Motion Pictures and Film",l:"Motion Pictures and Film — Cinéma"},
+  {v:"Museums and Institutions",l:"Museums and Institutions — Musées"},
+  {v:"Music",l:"Music — Musique"},
+  {v:"Nanotechnology",l:"Nanotechnology — Nanotechnologie"},
+  {v:"Newspapers",l:"Newspapers — Presse"},
+  {v:"Non-Profit Organization Management",l:"Non-Profit Organization Management — ONG/Association"},
+  {v:"Oil & Energy",l:"Oil & Energy — Pétrole & Énergie"},
+  {v:"Online Media",l:"Online Media — Médias en ligne"},
+  {v:"Outsourcing/Offshoring",l:"Outsourcing/Offshoring — Externalisation"},
+  {v:"Package/Freight Delivery",l:"Package/Freight Delivery — Livraison & Fret"},
+  {v:"Packaging and Containers",l:"Packaging and Containers — Emballage"},
+  {v:"Paper & Forest Products",l:"Paper & Forest Products — Papier & Forêt"},
+  {v:"Performing Arts",l:"Performing Arts — Arts du spectacle"},
+  {v:"Pharmaceuticals",l:"Pharmaceuticals — Pharmaceutique"},
+  {v:"Philanthropy",l:"Philanthropy — Philanthropie"},
+  {v:"Photography",l:"Photography — Photographie"},
+  {v:"Plastics",l:"Plastics — Plastiques"},
+  {v:"Political Organization",l:"Political Organization — Organisation politique"},
+  {v:"Primary/Secondary Education",l:"Primary/Secondary Education — Enseignement primaire/secondaire"},
+  {v:"Printing",l:"Printing — Imprimerie"},
+  {v:"Professional Training & Coaching",l:"Professional Training & Coaching — Formation professionnelle"},
+  {v:"Program Development",l:"Program Development — Développement de programmes"},
+  {v:"Public Policy",l:"Public Policy — Politiques publiques"},
+  {v:"Public Relations and Communications",l:"Public Relations and Communications — Communication"},
+  {v:"Public Safety",l:"Public Safety — Sécurité publique"},
+  {v:"Publishing",l:"Publishing — Édition"},
+  {v:"Railroad Manufacture",l:"Railroad Manufacture — Fabrication ferroviaire"},
+  {v:"Ranching",l:"Ranching — Élevage"},
   {v:"Real Estate",l:"Real Estate — Immobilier"},
-  {v:"Renewables & Environment",l:"Renewables & Environment"},
-  {v:"Restaurants",l:"Restaurants — Restauration"},{v:"Retail",l:"Retail — Commerce"},
-  {v:"Staffing and Recruiting",l:"Staffing — Recrutement"},
-  {v:"Telecommunications",l:"Telecommunications"},{v:"Wholesale",l:"Wholesale — Commerce de gros"},
+  {v:"Recreational Facilities and Services",l:"Recreational Facilities and Services — Loisirs"},
+  {v:"Religious Institutions",l:"Religious Institutions — Institutions religieuses"},
+  {v:"Renewables & Environment",l:"Renewables & Environment — Énergies renouvelables"},
+  {v:"Research",l:"Research — Recherche"},
+  {v:"Restaurants",l:"Restaurants — Restauration"},
+  {v:"Retail",l:"Retail — Commerce de détail"},
+  {v:"Security and Investigations",l:"Security and Investigations — Sécurité"},
+  {v:"Semiconductors",l:"Semiconductors — Semi-conducteurs"},
+  {v:"Shipbuilding",l:"Shipbuilding — Construction navale"},
+  {v:"Sporting Goods",l:"Sporting Goods — Articles de sport"},
+  {v:"Sports",l:"Sports"},
+  {v:"Staffing and Recruiting",l:"Staffing and Recruiting — Recrutement"},
+  {v:"Supermarkets",l:"Supermarkets — Grande distribution"},
+  {v:"Telecommunications",l:"Telecommunications — Télécommunications"},
+  {v:"Textiles",l:"Textiles"},
+  {v:"Think Tanks",l:"Think Tanks"},
+  {v:"Tobacco",l:"Tobacco — Tabac"},
+  {v:"Translation and Localization",l:"Translation and Localization — Traduction"},
+  {v:"Transportation/Trucking/Railroad",l:"Transportation/Trucking/Railroad — Transport"},
+  {v:"Utilities",l:"Utilities — Services publics"},
+  {v:"Venture Capital & Private Equity",l:"Venture Capital & Private Equity"},
+  {v:"Veterinary",l:"Veterinary — Vétérinaire"},
+  {v:"Warehousing",l:"Warehousing — Entreposage"},
+  {v:"Wholesale",l:"Wholesale — Commerce de gros"},
+  {v:"Wine and Spirits",l:"Wine and Spirits — Vins & Spiritueux"},
+  {v:"Wireless",l:"Wireless — Sans fil"},
+  {v:"Writing and Editing",l:"Writing and Editing — Rédaction"},
 ].sort((a,b) => a.l.localeCompare(b.l));
 
 function SectorSearch({ value, onChange }) {
