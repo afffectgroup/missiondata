@@ -13,18 +13,19 @@ export default async function handler(req, res) {
   let profile;
   try { ({ profile } = await requireAuth(req)); } catch(e) { return res.status(401).json({ error: e.message }); }
 
-  const { campaign_id, query, limit = 50 } = req.body;
+  const { campaign_id, query, limit = 10 } = req.body;
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id requis.' });
 
   const ICYPEAS_KEY = process.env.ICYPEAS_API_KEY;
   if (!ICYPEAS_KEY) return res.status(500).json({ error: 'Cle Icypeas manquante.' });
 
   const HEADERS = { 'Content-Type': 'application/json', 'Authorization': ICYPEAS_KEY };
+  const scrapeLimit = Math.min(limit * 3, 100);
 
   try {
     const data = await safeFetch('https://app.icypeas.com/api/find-people', {
       method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ query, pagination: { from: 0, size: Math.min(limit, 50) } }),
+      body: JSON.stringify({ query, pagination: { from: 0, size: scrapeLimit } }),
     });
 
     if (!data) return res.status(502).json({ error: 'Icypeas: reponse invalide.' });
@@ -32,17 +33,16 @@ export default async function handler(req, res) {
 
     const leads = data.leads || [];
     const total = data.total || leads.length;
+    if (!leads.length) return res.status(200).json({ saved: 0, total: 0, reserve: 0, emails_submitted: 0 });
 
-    if (!leads.length) return res.status(200).json({ saved: 0, total: 0 });
-
-    // Clear existing prospects for this campaign
+    // Clear existing
     await supabaseAdmin.from('prospects').delete().eq('campaign_id', campaign_id);
 
-    // Save to DB
-    const rows = leads.slice(0, limit).map(p => ({
+    // First limit = visible, rest = reserve
+    const rows = leads.map((p, i) => ({
       campaign_id,
       user_id:      profile.id,
-      fullname:     p.fullname || `${p.firstname || ''} ${p.lastname || ''}`.trim(),
+      fullname:     p.fullname || ((p.firstname || '') + ' ' + (p.lastname || '')).trim(),
       job_title:    p.lastJobTitle || p.headline || '',
       company:      p.lastCompanyName || '',
       sector:       p.lastCompanyIndustry || '',
@@ -51,16 +51,42 @@ export default async function handler(req, res) {
       linkedin_url: p.profileUrl || '',
       location:     p.address || '',
       source:       'icypeas',
+      reserve:      i >= limit,
     }));
 
     const { data: saved } = await supabaseAdmin.from('prospects').insert(rows).select();
 
+    // Auto-submit email search for ALL prospects
+    let emailsSubmitted = 0;
+    for (const prospect of (saved || [])) {
+      try {
+        const parts = (prospect.fullname || '').trim().split(' ');
+        const firstname = parts[0] || '';
+        const lastname = parts.slice(1).join(' ') || '';
+        if (!firstname || !prospect.company) continue;
+
+        const d = await safeFetch('https://app.icypeas.com/api/email-search', {
+          method: 'POST', headers: HEADERS,
+          body: JSON.stringify({ firstname, lastname, domainOrCompany: prospect.company }),
+        });
+        const searchId = d?.item?._id;
+        if (searchId) {
+          await supabaseAdmin.from('prospects').update({ icypeas_search_id: searchId }).eq('id', prospect.id);
+          emailsSubmitted++;
+        }
+        await new Promise(r => setTimeout(r, 150));
+      } catch(e) { /* continue */ }
+    }
+
+    const visibleCount = (saved || []).filter(p => !p.reserve).length;
+    const reserveCount = (saved || []).filter(p => p.reserve).length;
+
     await supabaseAdmin.from('campaigns').update({
-      prospects_count: saved?.length || 0,
+      prospects_count: visibleCount,
       updated_at: new Date().toISOString(),
     }).eq('id', campaign_id);
 
-    return res.status(200).json({ saved: saved?.length || 0, total, prospects: saved });
+    return res.status(200).json({ saved: visibleCount, reserve: reserveCount, total, emails_submitted: emailsSubmitted });
   } catch(err) {
     return res.status(502).json({ error: err.message });
   }
