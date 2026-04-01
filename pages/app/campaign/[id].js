@@ -124,14 +124,14 @@ export default function CampaignPage() {
       setProspects(d.prospects || []);
       setSequences(d.sequences || []);
       setSelectedTitles(d.campaign.selected_titles || []);
-      // Sync filters: prefer DB, fallback to localStorage
+      // Sync filters: localStorage wins (user's current selection), then DB, then empty
       const cachedFilters = (() => {
         try { return JSON.parse(localStorage.getItem(`filters_${id}`) || '{}'); } catch { return {}; }
       })();
       setFilters(f => ({
         ...f,
-        sector: d.campaign.client_sector || cachedFilters.sector || '',
-        location: d.campaign.client_location || cachedFilters.location || '',
+        sector: cachedFilters.sector || d.campaign.client_sector || '',
+        location: cachedFilters.location || d.campaign.client_location || '',
       }));
     }
   }
@@ -143,6 +143,18 @@ export default function CampaignPage() {
   async function saveTitles(titles) {
     const token = await getToken();
     await fetch(`/api/campaigns/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ selected_titles: titles }) });
+  }
+
+  async function saveFilters(newFilters) {
+    // 1. localStorage first — survives any re-render
+    try { localStorage.setItem(`filters_${id}`, JSON.stringify({ sector: newFilters.sector || '', location: newFilters.location || '' })); } catch(e) {}
+    // 2. Update local campaign state immediately (keeps header in sync)
+    setCampaign(c => ({ ...c, client_sector: newFilters.sector || c.client_sector, client_location: newFilters.location || c.client_location }));
+    // 3. Persist to DB
+    try {
+      const token = await getToken();
+      await fetch(`/api/campaigns/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ client_sector: newFilters.sector || '', client_location: newFilters.location || '' }) });
+    } catch(e) { console.warn('saveFilters error:', e); }
   }
 
   async function runSearch() {
