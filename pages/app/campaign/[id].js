@@ -433,8 +433,8 @@ export default function CampaignPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--mf-blue-lt)', display: 'grid', placeItems: 'center', fontWeight: '800', color: 'var(--mf-blue)', flexShrink: 0, fontSize: '14px' }}>{visibleProspects.length ? '✓' : '3'}</div>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Recherche Icypeas</div>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>3× scraping + enrichissement email automatique (Source 1)</div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Recherche vos futurs clients</div>
+                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>3× scraping + enrichissement email automatique</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Afficher :</span>
                         {[10, 25, 50].map(n => {
@@ -883,7 +883,9 @@ function LocationSelect({ value, onChange }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <div className="input" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }} onClick={() => setOpen(!open)}>
-        <span style={{ color: selected ? 'var(--text)' : 'var(--muted)' }}>{selected ? selected.l : 'Choisir...'}</span>
+        <span style={{ color: selected ? 'var(--text)' : 'var(--muted)' }}>
+          {selected ? (selected.l.includes(' — ') ? selected.l.split(' — ')[0] : selected.l) : 'Choisir un secteur...'}
+        </span>
         <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>
       </div>
       {open && (
@@ -1082,7 +1084,9 @@ function SectorSearch({ value, onChange }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <div className="input" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }} onClick={() => setOpen(!open)}>
-        <span style={{ color: selected ? 'var(--text)' : 'var(--muted)' }}>{selected ? selected.l : 'Choisir...'}</span>
+        <span style={{ color: selected ? 'var(--text)' : 'var(--muted)' }}>
+          {selected ? (selected.l.includes(' — ') ? selected.l.split(' — ')[0] : selected.l) : 'Choisir un secteur...'}
+        </span>
         <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>
       </div>
       {open && (
@@ -1092,14 +1096,18 @@ function SectorSearch({ value, onChange }) {
           </div>
           <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
             {value && <div onClick={() => { onChange(''); setOpen(false); setSearch(''); }} style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--muted)' }}>— Aucun filtre —</div>}
-            {filtered.map(s => (
-              <div key={s.v} onClick={() => { onChange(s.v); setOpen(false); setSearch(''); }}
-                style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', background: value === s.v ? 'var(--mf-blue-lt)' : 'white', color: value === s.v ? 'var(--mf-blue)' : 'var(--text)' }}
-                onMouseOver={e => { if (value !== s.v) e.currentTarget.style.background = 'var(--surface)'; }}
-                onMouseOut={e => { if (value !== s.v) e.currentTarget.style.background = 'white'; }}>
-                {s.l}
-              </div>
-            ))}
+            {filtered.map(s => {
+              const [en, fr] = s.l.includes(' — ') ? s.l.split(' — ') : [s.l, null];
+              return (
+                <div key={s.v} onClick={() => { onChange(s.v); setOpen(false); setSearch(''); }}
+                  style={{ padding: '7px 10px', cursor: 'pointer', background: value === s.v ? 'var(--mf-blue-lt)' : 'white' }}
+                  onMouseOver={e => { if (value !== s.v) e.currentTarget.style.background = 'var(--surface)'; }}
+                  onMouseOut={e => { if (value !== s.v) e.currentTarget.style.background = 'white'; }}>
+                  <div style={{ fontSize: '12px', fontWeight: value === s.v ? '600' : '400', color: value === s.v ? 'var(--mf-blue)' : 'var(--text)' }}>{en}</div>
+                  {fr && <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{fr}</div>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
