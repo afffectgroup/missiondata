@@ -140,8 +140,8 @@ export default function CampaignPage() {
   async function runSearch() {
     if (!selectedTitles.length) { showToast('Sélectionne au moins un poste.'); return; }
     setBusy(true);
-    addLog('Recherche Icypeas en cours…', 'inf');
-    addLog('Enrichissement email automatique lancé en parallèle…', 'inf');
+    addLog('Recherche Source 1 en cours…', 'inf');
+    addLog('Source 1 : enrichissement email en cours…', 'inf');
     const token = await getToken();
 
     const query = {
@@ -159,7 +159,7 @@ export default function CampaignPage() {
       body: JSON.stringify({ campaign_id: id, query, limit: searchLimit || campaign.prospect_limit || 10 }),
     });
     const d = await r.json();
-    if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur Icypeas : ' + d.error); setBusy(false); return; }
+    if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur Source 1 : ' + d.error); setBusy(false); return; }
     addLog(`${d.saved} prospects affichés · ${d.reserve} en réserve · ${d.emails_submitted} emails en cours`, 'ok');
     showToast(d.saved + ' prospects affichés · ' + d.reserve + ' en réserve · emails en cours...');
     await load();
@@ -206,7 +206,7 @@ export default function CampaignPage() {
       body: JSON.stringify({ prospect_id: prospectId, action: 'submit', field }),
     });
     const d = await r.json();
-    if (d.error) { showToast('Erreur Fullenrich : ' + d.error); setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; }); return; }
+    if (d.error) { showToast('Erreur Source 2 : ' + d.error); setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; }); return; }
     showToast('Enrichissement lancé — résultat dans ~30-60s');
     // Poll every 10s
     let attempts = 0;
@@ -385,11 +385,11 @@ export default function CampaignPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text2)', marginBottom: '6px' }}>Secteur d'activité</div>
-                    <SectorSearch value={filters.sector} onChange={v => setFilters(f => ({ ...f, sector: v }))} />
+                    <SectorSearch value={filters.sector} onChange={v => { const nf = {...filters, sector: v}; setFilters(nf); saveFilters(nf); }} />
                   </div>
                   <div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text2)', marginBottom: '6px' }}>Localisation</div>
-                    <LocationSelect value={filters.location} onChange={v => setFilters(f => ({ ...f, location: v }))} />
+                    <LocationSelect value={filters.location} onChange={v => { const nf = {...filters, location: v}; setFilters(nf); saveFilters(nf); }} />
                   </div>
                 </div>
 
@@ -434,7 +434,7 @@ export default function CampaignPage() {
                     <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--mf-blue-lt)', display: 'grid', placeItems: 'center', fontWeight: '800', color: 'var(--mf-blue)', flexShrink: 0, fontSize: '14px' }}>{visibleProspects.length ? '✓' : '3'}</div>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Recherche Icypeas</div>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>3× scraping + enrichissement email automatique</div>
+                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>3× scraping + enrichissement email automatique (Source 1)</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Afficher :</span>
                         {[10, 25, 50].map(n => {
@@ -565,8 +565,8 @@ export default function CampaignPage() {
                                     {p.email_cert === 'not_found' ? <span style={{ color:'#ef4444' }}>❌ Non trouvé</span> : '—'}
                                   </span>
                             }
-                            {/* Fullenrich CTA — show when no email */}
-                            {!p.email && (
+                            {/* Source 2 CTA — show only when Source 1 is done */}
+                            {!p.email && (!p.icypeas_search_id || p.email_cert) && (
                               <div style={{ position:'relative' }}>
                                 {feLoading[p.id] ? (
                                   <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', fontSize:'10px', color:'#7c3aed', background:'#f0ebff', padding:'2px 6px', borderRadius:'4px' }}>
@@ -577,12 +577,12 @@ export default function CampaignPage() {
                                   <>
                                     <button onClick={() => setFePopover(fePopover === p.id ? null : p.id)}
                                       style={{ fontSize:'10px', padding:'2px 7px', borderRadius:'4px', border:'1px solid #7c3aed', background:'white', color:'#7c3aed', cursor:'pointer', fontFamily:'inherit', fontWeight:'600', whiteSpace:'nowrap' }}
-                                      title="Enrichir via Fullenrich">
+                                      title="Enrichir via Source 2">
                                       ✦ Fullenrich
                                     </button>
                                     {fePopover === p.id && (
                                       <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'white', border:'1px solid var(--border)', borderRadius:'var(--r)', boxShadow:'var(--shadow)', zIndex:100, padding:'8px', minWidth:'160px' }}>
-                                        <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'6px', fontWeight:'600' }}>Enrichir via Fullenrich</div>
+                                        <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'6px', fontWeight:'600' }}>Enrichir via Source 2</div>
                                         {[
                                           { field:'email', label:'📧 Email seulement', desc:'~5ct si trouvé' },
                                           { field:'phone', label:'📱 Mobile seulement', desc:'~5ct si trouvé' },
@@ -606,9 +606,23 @@ export default function CampaignPage() {
                         </td>
                         {/* Mobile */}
                         <td style={{ padding: '9px 12px', fontFamily: 'JetBrains Mono,monospace', fontSize: '11px' }}>
-                          {p.mobile
-                            ? <span style={{ color:'#7c3aed', fontWeight:'600' }}>{p.mobile}</span>
-                            : <span style={{ color:'var(--muted)' }}>—</span>}
+                          <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                            {p.mobile
+                              ? <span style={{ color:'#7c3aed', fontWeight:'600' }}>{p.mobile}</span>
+                              : <span style={{ color:'var(--muted)' }}>—</span>
+                            }
+                            {/* Mobile CTA — show for all prospects without mobile */}
+                            {!p.mobile && !feLoading[p.id] && (
+                              <button onClick={() => fullenrichSubmit(p.id, 'phone')}
+                                style={{ fontSize:'10px', padding:'2px 6px', borderRadius:'4px', border:'1px solid #7c3aed', background:'white', color:'#7c3aed', cursor:'pointer', fontFamily:'inherit', fontWeight:'600' }}
+                                title="Trouver le mobile via Source 2">
+                                📱
+                              </button>
+                            )}
+                            {feLoading[p.id] === 'phone' && (
+                              <div className="spinner" style={{ width:'10px', height:'10px', borderWidth:'1.5px', borderColor:'#7c3aed', borderTopColor:'transparent' }} />
+                            )}
+                          </div>
                         </td>
                         <td style={{ padding: '9px 12px' }}>{p.email_cert ? <span style={{ background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', padding: '2px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{p.email_cert}</span> : '—'}</td>
                         <td style={{ padding: '9px 12px' }}>{p.linkedin_url ? <a href={p.linkedin_url} target="_blank" rel="noopener" style={{ color: 'var(--mf-blue)', fontWeight: '600', fontSize: '12px' }}>↗</a> : '—'}</td>
