@@ -86,7 +86,7 @@ export default function CampaignPage() {
 
   useEffect(() => { if (!loading && !profile) router.push('/login'); }, [loading, profile]);
 
-  // Close Fullenrich popover on outside click
+  // Close Source 2 popover on outside click
   useEffect(() => {
     function handleClick() { setFePopover(null); }
     document.addEventListener('click', handleClick);
@@ -124,7 +124,12 @@ export default function CampaignPage() {
       setProspects(d.prospects || []);
       setSequences(d.sequences || []);
       setSelectedTitles(d.campaign.selected_titles || []);
-      setFilters(f => ({ ...f, sector: d.campaign.client_sector || '', location: d.campaign.client_location || '' }));
+      // Always sync filters from DB to prevent state drift on tab switch
+      setFilters(f => ({
+        ...f,
+        sector: d.campaign.client_sector || '',
+        location: d.campaign.client_location || '',
+      }));
     }
   }
 
@@ -144,10 +149,16 @@ export default function CampaignPage() {
     addLog('Source 1 : enrichissement email en cours…', 'inf');
     const token = await getToken();
 
+    // Always use filters state (synced from DB on load)
+    const activeSector = filters.sector || campaign.client_sector || '';
+    const activeLocation = filters.location || campaign.client_location || '';
+    
+    addLog(`Filtres : secteur="${activeSector}" · localisation="${activeLocation}"`, 'inf');
+
     const query = {
       currentJobTitle: { include: selectedTitles },
-      ...((filters.location || campaign.client_location) ? { location: { include: [filters.location || campaign.client_location] } } : {}),
-      ...((filters.sector || campaign.client_sector) ? { industry: { include: [filters.sector || campaign.client_sector] } } : {}),
+      ...(activeLocation ? { location: { include: [activeLocation] } } : {}),
+      ...(activeSector ? { industry: { include: [activeSector] } } : {}),
       ...(filters.companySize.length ? { companyHeadcount: { include: filters.companySize } } : {}),
       ...(filters.keywords ? { keywords: { include: filters.keywords.split(',').map(k => k.trim()).filter(Boolean) } } : {}),
       ...((filters.minTenure || filters.maxTenure) ? { currentJobTenure: { min: parseInt(filters.minTenure)||0, max: parseInt(filters.maxTenure)||120 } } : {}),
@@ -227,7 +238,7 @@ export default function CampaignPage() {
       if (d2.pending) return;
       clearInterval(poll);
       setFeLoading(p => { const n={...p}; delete n[prospectId]; return n; });
-      if (d2.not_found) { showToast('Aucun résultat trouvé via Fullenrich'); return; }
+      if (d2.not_found) { showToast('Aucun résultat trouvé via Source 2'); return; }
       if (d2.error) { showToast('Erreur : ' + d2.error); return; }
       const msg = [d2.email && '✓ Email trouvé', d2.mobile && '✓ Mobile trouvé'].filter(Boolean).join(' · ');
       showToast(msg || 'Enrichissement terminé');
@@ -583,7 +594,7 @@ export default function CampaignPage() {
                                     <button onClick={() => setFePopover(fePopover === p.id ? null : p.id)}
                                       style={{ fontSize:'10px', padding:'2px 7px', borderRadius:'4px', border:'1px solid #7c3aed', background:'white', color:'#7c3aed', cursor:'pointer', fontFamily:'inherit', fontWeight:'600', whiteSpace:'nowrap' }}
                                       title="Enrichir via Source 2">
-                                      ✦ Fullenrich
+                                      ✦ Source 2
                                     </button>
                                     {fePopover === p.id && (
                                       <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'white', border:'1px solid var(--border)', borderRadius:'var(--r)', boxShadow:'var(--shadow)', zIndex:100, padding:'8px', minWidth:'160px' }}>
