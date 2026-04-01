@@ -243,10 +243,10 @@ export default function AppPage() {
 function NewCampaignModal({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', client_sector: '', job_title_target: '', client_location: '', prospect_limit: 10,
+    name: '', job_title_target: '', prospect_limit: 10,
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const canSubmit = form.name && form.client_sector && form.job_title_target;
+  const canSubmit = form.name && form.job_title_target;
 
   async function create() {
     if (!canSubmit) return;
@@ -281,10 +281,6 @@ function NewCampaignModal({ onClose, onCreated }) {
             <input className="input" value={form.name} onChange={e => f('name', e.target.value)} placeholder="Ex : DAF Banque Île-de-France" autoFocus />
           </div>
           <div className="field">
-            <label>Secteur d'activité *</label>
-            <SectorSearch value={form.client_sector} onChange={v => f('client_sector', v)} />
-          </div>
-          <div className="field">
             <label>Domaine de poste ciblé *</label>
             <select className="input" value={form.job_title_target} onChange={e => f('job_title_target', e.target.value)}>
               <option value="">-- Choisir un domaine --</option>
@@ -301,10 +297,6 @@ function NewCampaignModal({ onClose, onCreated }) {
               <option value="Métiers de la restauration">Métiers de la restauration</option>
               <option value="Métiers artisanaux">Métiers artisanaux</option>
             </select>
-          </div>
-          <div className="field">
-            <label>Localisation</label>
-            <input className="input" value={form.client_location} onChange={e => f('client_location', e.target.value)} placeholder="Ex : Paris, Lyon, Rennes..." />
           </div>
           <div className="field">
             <label>Taille de la liste</label>
