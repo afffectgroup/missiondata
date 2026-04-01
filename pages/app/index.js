@@ -75,13 +75,11 @@ function SectorSearch({ value, onChange }) {
   const ref = useRef(null);
   const selected = SECTORS.find(s => s.v === value);
   const filtered = SECTORS.filter(s => s.l.toLowerCase().includes(search.toLowerCase()));
-
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <div className="input" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setOpen(!open)}>
@@ -109,10 +107,6 @@ function SectorSearch({ value, onChange }) {
     </div>
   );
 }
-
-const NAV = [
-  { icon: <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>, label: 'Dossiers', key: 'dossiers' },
-];
 
 export default function AppPage() {
   const { profile, loading, signOut } = useAuth();
@@ -153,11 +147,7 @@ export default function AppPage() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
-
-      {/* SIDEBAR */}
       <aside style={{ width: '240px', background: 'white', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: 0, height: '100vh' }}>
-
-        {/* Logo */}
         <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <LogoIcon size={34} />
@@ -167,24 +157,17 @@ export default function AppPage() {
             </div>
           </div>
         </div>
-
-        {/* Nav */}
         <nav style={{ flex: 1, padding: '12px 8px' }}>
           <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--muted)', padding: '8px 8px 4px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Prospection</div>
-          <button
-            style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '9px 10px', borderRadius: 'var(--r)', background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', textAlign: 'left' }}>
+          <button style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '9px 10px', borderRadius: 'var(--r)', background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', textAlign: 'left' }}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
             Mes dossiers
             <span style={{ marginLeft: 'auto', background: 'linear-gradient(135deg, #0090FF, #0070CC)', color: 'white', borderRadius: '20px', padding: '1px 7px', fontSize: '11px' }}>{campaigns.length}</span>
           </button>
         </nav>
-
-        {/* User */}
         <div style={{ padding: '12px 8px', borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: 'var(--r)', marginBottom: '4px' }}>
-            <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #0090FF, #0070CC)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: '700', color: 'white', flexShrink: 0 }}>
-              {name[0].toUpperCase()}
-            </div>
+            <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #0090FF, #0070CC)', borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: '700', color: 'white', flexShrink: 0 }}>{name[0].toUpperCase()}</div>
             <div style={{ overflow: 'hidden', flex: 1 }}>
               <div style={{ fontSize: '13px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
               <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Freelance</div>
@@ -199,14 +182,11 @@ export default function AppPage() {
         </div>
       </aside>
 
-      {/* MAIN */}
       <main style={{ flex: 1, padding: '32px', overflowY: 'auto', maxWidth: '1100px' }}>
-
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '2px' }}>Mes dossiers</h1>
-            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Chaque dossier génère une base de prospects + séquences personnalisées</p>
+            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Chaque dossier génère une base de prospects + séquence de prospection</p>
           </div>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/></svg>
@@ -214,25 +194,19 @@ export default function AppPage() {
           </button>
         </div>
 
-        {/* Empty state */}
         {campaigns.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 24px', background: 'white', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
             <div style={{ width: '48px', height: '48px', background: 'var(--mf-blue-lt)', borderRadius: '12px', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
               <svg width="22" height="22" viewBox="0 0 20 20" fill="var(--mf-blue)"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
             </div>
             <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '6px' }}>Aucun dossier</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Crée ton premier dossier en décrivant un client existant.</p>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Crée ton premier dossier — 30 secondes chrono.</p>
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>Créer mon premier dossier</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {/* Table header */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 100px 120px', gap: '16px', padding: '8px 16px', fontSize: '11px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              <span>Dossier</span>
-              <span>Secteur</span>
-              <span>Prospects</span>
-              <span>Séquences</span>
-              <span>Date</span>
+              <span>Dossier</span><span>Secteur</span><span>Prospects</span><span>Séquences</span><span>Date</span>
             </div>
             {campaigns.map(c => (
               <div key={c.id}
@@ -245,16 +219,8 @@ export default function AppPage() {
                   {c.client_location && <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{c.client_location}</div>}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{c.client_sector || '—'}</div>
-                <div>
-                  {c.prospects_count > 0
-                    ? <span className="badge badge-blue">{c.prospects_count}</span>
-                    : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}
-                </div>
-                <div>
-                  {c.sequences_count > 0
-                    ? <span className="badge badge-green">{c.sequences_count}</span>
-                    : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}
-                </div>
+                <div>{c.prospects_count > 0 ? <span className="badge badge-blue">{c.prospects_count}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}</div>
+                <div>{c.sequences_count > 0 ? <span className="badge badge-green">{c.sequences_count}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
                   <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={e => { e.stopPropagation(); deleteCampaign(c.id); }}>
@@ -273,139 +239,93 @@ export default function AppPage() {
   );
 }
 
+// ─── MODAL CRÉATION 1 ÉTAPE ────────────────────────────────────────────────────
 function NewCampaignModal({ onClose, onCreated }) {
-  const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', client_type: 'PME', client_sector: '', job_title_target: '', client_location: '', prospect_limit: 10,
-    client_need: '', freelance_result: '', freelance_kpi: '', freelance_angle: '', freelance_tone: 'professionnel'
+    name: '', client_sector: '', job_title_target: '', client_location: '', prospect_limit: 10,
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const canSubmit = form.name && form.client_sector && form.job_title_target;
 
   async function create() {
-    if (!form.name || !form.client_sector) return;
+    if (!canSubmit) return;
     setSaving(true);
     const { data: s } = await supabase.auth.getSession();
     const r = await fetch('/api/campaigns', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${s.session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify({ ...form, status: 'draft' })
     });
     const d = await r.json();
     if (d.campaign) onCreated(d.campaign.id);
     setSaving(false);
   }
 
-  const inp = (k, props = {}) => <input className="input" value={form[k]} onChange={e => f(k, e.target.value)} {...props} />;
-  const sel = (k, opts) => (
-    <select className="input" value={form[k]} onChange={e => f(k, e.target.value)}>
-      {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-    </select>
-  );
-  const ta = (k, props = {}) => <textarea className="input" value={form[k]} onChange={e => f(k, e.target.value)} {...props} />;
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '24px' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.15)' }}>
-
-        {/* Modal header */}
-        <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+      <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,.15)' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: '700' }}>{step === 1 ? 'Nouveau dossier' : 'Ton profil de résultats'}</div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>Étape {step} sur 2</div>
+            <div style={{ fontSize: '15px', fontWeight: '700' }}>Nouveau dossier</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>30 secondes — tu pourras affiner dans le dossier</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '4px' }}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
           </button>
         </div>
-
-        {/* Progress */}
-        <div style={{ display: 'flex', gap: '4px', padding: '12px 24px' }}>
-          {[1, 2].map(n => <div key={n} style={{ flex: 1, height: '3px', borderRadius: '99px', background: step >= n ? 'var(--mf-blue)' : 'var(--border)', transition: 'background .3s' }} />)}
-        </div>
-
-        <div style={{ padding: '0 24px 24px' }}>
-          {step === 1 && (
-            <>
-              <div className="field"><label>Nom du dossier *</label>{inp('name', { placeholder: 'Ex : Dirigeants Assurance Bretagne' })}</div>
-              <div className="field">
-                <label>Type de client</label>
-                {sel('client_type', [
-                  { v: 'TPE', l: 'TPE (1-10 salariés)' },
-                  { v: 'PME', l: 'PME (11-250 salariés)' },
-                  { v: 'ETI', l: 'ETI (250-5000 salariés)' },
-                  { v: 'Grande entreprise', l: 'Grande entreprise (5000+)' },
-                  { v: 'Indépendant', l: 'Indépendant / Freelance' },
-                ])}
-              </div>
-              <div className="field">
-                <label>Secteur d'activité *</label>
-                <SectorSearch value={form.client_sector} onChange={v => f('client_sector', v)} />
-              </div>
-              <div className="field">
-                <label>Domaine de poste ciblé *</label>
-                <select className="input" value={form.job_title_target} onChange={e => f('job_title_target', e.target.value)}>
-                  <option value="">-- Choisir un domaine --</option>
-                  <option value="Direction générale">Direction générale</option>
-                  <option value="Direction financière">Direction financière</option>
-                  <option value="Direction commerciale">Direction commerciale</option>
-                  <option value="Direction marketing">Direction marketing</option>
-                  <option value="Direction RH">Direction RH</option>
-                  <option value="Direction technique">Direction technique</option>
-                  <option value="Direction opérations">Direction opérations</option>
-                  <option value="Métiers juridiques">Métiers juridiques</option>
-                  <option value="Métiers de santé">Métiers de santé</option>
-                  <option value="Métiers immobilier">Métiers immobilier</option>
-                  <option value="Métiers de la restauration">Métiers de la restauration</option>
-                  <option value="Métiers artisanaux">Métiers artisanaux</option>
-                </select>
-              </div>
-              <div className="field"><label>Localisation</label>{inp('client_location', { placeholder: 'Ex : Rennes, Paris, Lyon...' })}</div>
-              <div className="field">
-                <label>Taille de la liste</label>
-                <div style={{ display:'flex', gap:'8px' }}>
-                  {[10, 25, 50].map(n => (
-                    <button key={n} type="button" onClick={() => f('prospect_limit', n)}
-                      style={{ flex:1, padding:'9px', borderRadius:'var(--r)', border: form.prospect_limit===n ? '2px solid var(--mf-blue)' : '1px solid var(--border)', background: form.prospect_limit===n ? 'var(--mf-blue-lt)' : 'white', color: form.prospect_limit===n ? 'var(--mf-blue)' : 'var(--text2)', fontWeight: form.prospect_limit===n ? '700' : '500', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
-                      {n} prospects
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-                <button className="btn btn-primary btn-sm" onClick={() => setStep(2)} disabled={!form.name || !form.client_sector || !form.job_title_target}>Suivant →</button>
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <div className="field"><label>Résultat obtenu pour un client similaire</label>{ta('freelance_result', { placeholder: 'Ex : Refonte du site d\'une agence → +40% de leads en 3 mois', rows: 3 })}</div>
-              <div className="field"><label>Chiffre clé / KPI</label>{inp('freelance_kpi', { placeholder: 'Ex : +40% de leads, 3× plus de visibilité...' })}</div>
-              <div className="field"><label>Ton angle différenciateur</label>{inp('freelance_angle', { placeholder: 'Ex : Spécialiste secteur assurance depuis 5 ans...' })}</div>
-              <div className="field">
-                <label>Ton des messages</label>
-                {sel('freelance_tone', [
-                  { v: 'professionnel', l: 'Professionnel' },
-                  { v: 'chaleureux', l: 'Chaleureux' },
-                  { v: 'direct', l: 'Direct' },
-                  { v: 'expert', l: 'Expert' },
-                ])}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Retour</button>
-                <button className="btn btn-primary btn-sm" onClick={create} disabled={saving}>
-                  {saving ? <div className="spinner" /> : null}
-                  Créer le dossier
+        <div style={{ padding: '20px 24px 24px' }}>
+          <div className="field">
+            <label>Nom du dossier *</label>
+            <input className="input" value={form.name} onChange={e => f('name', e.target.value)} placeholder="Ex : DAF Banque Île-de-France" autoFocus />
+          </div>
+          <div className="field">
+            <label>Secteur d'activité *</label>
+            <SectorSearch value={form.client_sector} onChange={v => f('client_sector', v)} />
+          </div>
+          <div className="field">
+            <label>Domaine de poste ciblé *</label>
+            <select className="input" value={form.job_title_target} onChange={e => f('job_title_target', e.target.value)}>
+              <option value="">-- Choisir un domaine --</option>
+              <option value="Direction générale">Direction générale</option>
+              <option value="Direction financière">Direction financière</option>
+              <option value="Direction commerciale">Direction commerciale</option>
+              <option value="Direction marketing">Direction marketing</option>
+              <option value="Direction RH">Direction RH</option>
+              <option value="Direction technique">Direction technique</option>
+              <option value="Direction opérations">Direction opérations</option>
+              <option value="Métiers juridiques">Métiers juridiques</option>
+              <option value="Métiers de santé">Métiers de santé</option>
+              <option value="Métiers immobilier">Métiers immobilier</option>
+              <option value="Métiers de la restauration">Métiers de la restauration</option>
+              <option value="Métiers artisanaux">Métiers artisanaux</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Localisation</label>
+            <input className="input" value={form.client_location} onChange={e => f('client_location', e.target.value)} placeholder="Ex : Paris, Lyon, Rennes..." />
+          </div>
+          <div className="field">
+            <label>Taille de la liste</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {[10, 25, 50].map(n => (
+                <button key={n} type="button" onClick={() => f('prospect_limit', n)}
+                  style={{ flex: 1, padding: '9px', borderRadius: 'var(--r)', border: form.prospect_limit === n ? '2px solid var(--mf-blue)' : '1px solid var(--border)', background: form.prospect_limit === n ? 'var(--mf-blue-lt)' : 'white', color: form.prospect_limit === n ? 'var(--mf-blue)' : 'var(--text2)', fontWeight: form.prospect_limit === n ? '700' : '500', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {n} prospects
                 </button>
-              </div>
-            </>
-          )}
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+            <button className="btn btn-primary btn-sm" onClick={create} disabled={!canSubmit || saving}>
+              {saving ? <div className="spinner" /> : null}
+              Créer le dossier →
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-// Tue Mar 17 10:18:19 UTC 2026
