@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   let profile;
   try { ({ profile } = await requireAuth(req)); } catch(e) { return res.status(401).json({ error: e.message }); }
 
-  const { campaign_id, query, limit = 10 } = req.body;
+  const { campaign_id, query, limit = 10, offset = 0 } = req.body;
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id requis.' });
 
   const ICYPEAS_KEY = process.env.ICYPEAS_API_KEY;
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   try {
     const data = await safeFetch('https://app.icypeas.com/api/find-people', {
       method: 'POST', headers: HEADERS,
-      body: JSON.stringify({ query, pagination: { from: 0, size: scrapeLimit } }),
+      body: JSON.stringify({ query, pagination: { from: offset, size: scrapeLimit } }),
     });
 
     if (!data) return res.status(502).json({ error: 'Réponse invalide de la source.' });
