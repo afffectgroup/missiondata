@@ -1,4 +1,4 @@
-// pages/api/prospects/enrich.js
+// pages/api/prospects/enrich.js — collect emails + reveal prospects as they arrive
 import { requireAuth } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
 
@@ -13,64 +13,94 @@ export default async function handler(req, res) {
   let profile;
   try { ({ profile } = await requireAuth(req)); } catch(e) { return res.status(401).json({ error: e.message }); }
 
-  const { prospect_ids, action } = req.body;
+  const { campaign_id, target } = req.body;
+  if (!campaign_id) return res.status(400).json({ error: 'campaign_id requis' });
+
   const ICYPEAS_KEY = process.env.ICYPEAS_API_KEY;
   const HEADERS = { 'Content-Type': 'application/json', 'Authorization': ICYPEAS_KEY };
 
-  // COLLECT — retrieve pending email searches
-  if (action === 'collect') {
-    const { data: prospects } = await supabaseAdmin
-      .from('prospects')
-      .select('id, icypeas_search_id, email')
-      .in('id', prospect_ids)
-      .not('icypeas_search_id', 'is', null);
+  // Get all pending prospects for this campaign
+  const { data: pending } = await supabaseAdmin
+    .from('prospects')
+    .select('id, icypeas_search_id, email, email_cert, reserve')
+    .eq('campaign_id', campaign_id)
+    .not('icypeas_search_id', 'is', null);
 
-    let enriched = 0, pending = 0;
+  // Count already visible (email found)
+  const { data: visible } = await supabaseAdmin
+    .from('prospects')
+    .select('id')
+    .eq('campaign_id', campaign_id)
+    .eq('reserve', false);
 
-    for (const p of (prospects || [])) {
-      try {
-        const d = await safeFetch('https://app.icypeas.com/api/bulk-single-searchs/read', {
-          method: 'POST', headers: HEADERS,
-          body: JSON.stringify({ id: p.icypeas_search_id }),
-        });
+  const visibleCount = visible?.length || 0;
+  const targetCount = target || 10;
 
-        const status = d?.item?.status || d?.status;
-        const email = d?.item?.email || d?.item?.data?.email;
+  let newlyFound = 0;
+  let stillPending = 0;
 
-        if (status === 'DEBITED' || status === 'DONE') {
-          if (email) {
-            await supabaseAdmin.from('prospects').update({
-              email,
-              email_cert: d?.item?.emailStatus || 'found',
-              icypeas_search_id: null,
-            }).eq('id', p.id);
-            enriched++;
-          } else {
-            // Debited but no email found
-            await supabaseAdmin.from('prospects').update({
-              email_cert: 'not_found',
-              icypeas_search_id: null,
-            }).eq('id', p.id);
-          }
-        } else if (status === 'NOT_FOUND') {
+  for (const p of (pending || [])) {
+    try {
+      const d = await safeFetch('https://app.icypeas.com/api/bulk-single-searchs/read', {
+        method: 'POST', headers: HEADERS,
+        body: JSON.stringify({ id: p.icypeas_search_id }),
+      });
+
+      const status = d?.item?.status || d?.status;
+      const email = d?.item?.email || d?.item?.data?.email;
+
+      if (status === 'DEBITED' || status === 'DONE') {
+        if (email) {
+          // Email found — reveal prospect if we haven't hit target yet
+          const shouldReveal = (visibleCount + newlyFound) < targetCount;
           await supabaseAdmin.from('prospects').update({
-            email_cert: 'not_found',
+            email,
+            email_cert: d?.item?.emailStatus || 'found',
             icypeas_search_id: null,
+            reserve: !shouldReveal, // reveal if under target
           }).eq('id', p.id);
-        } else if (status === 'PENDING' || status === 'IN_PROGRESS') {
-          pending++;
+          if (shouldReveal) newlyFound++;
         } else {
-          // Unknown status — mark as not_found to unblock UI
+          // Debited but no email
           await supabaseAdmin.from('prospects').update({
             email_cert: 'not_found',
             icypeas_search_id: null,
+            reserve: true, // stay hidden
           }).eq('id', p.id);
         }
-      } catch(e) { pending++; }
-    }
-
-    return res.status(200).json({ enriched, pending });
+      } else if (status === 'NOT_FOUND') {
+        await supabaseAdmin.from('prospects').update({
+          email_cert: 'not_found',
+          icypeas_search_id: null,
+          reserve: true,
+        }).eq('id', p.id);
+      } else if (status === 'PENDING' || status === 'IN_PROGRESS') {
+        stillPending++;
+      } else {
+        // Unknown — mark done
+        await supabaseAdmin.from('prospects').update({
+          email_cert: 'not_found',
+          icypeas_search_id: null,
+          reserve: true,
+        }).eq('id', p.id);
+      }
+    } catch(e) { stillPending++; }
   }
 
-  return res.status(400).json({ error: 'Action invalide' });
+  // Update campaign prospects_count
+  const finalVisible = visibleCount + newlyFound;
+  if (newlyFound > 0) {
+    await supabaseAdmin.from('campaigns').update({
+      prospects_count: finalVisible,
+      updated_at: new Date().toISOString(),
+    }).eq('id', campaign_id);
+  }
+
+  return res.status(200).json({
+    enriched: newlyFound,
+    visible: finalVisible,
+    target: targetCount,
+    pending: stillPending,
+    complete: finalVisible >= targetCount || stillPending === 0,
+  });
 }
