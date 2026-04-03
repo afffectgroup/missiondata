@@ -20,43 +20,37 @@ export default async function handler(req, res) {
   if (!ICYPEAS_KEY) return res.status(500).json({ error: 'Clé API manquante' });
   const HEADERS = { 'Content-Type': 'application/json', 'Authorization': ICYPEAS_KEY };
 
-  // Count currently visible prospects (already have email)
-  const { data: alreadyVisible } = await supabaseAdmin
+  // Count visible prospects
+  const { data: visible } = await supabaseAdmin
     .from('prospects')
-    .select('id')
+    .select('id', { count: 'exact' })
     .eq('campaign_id', campaign_id)
     .eq('reserve', false);
+  const visibleCount = visible?.length || 0;
 
-  // Also count total scraped (for progress reporting)
-  const { data: allProspects } = await supabaseAdmin
-    .from('prospects')
-    .select('id')
-    .eq('campaign_id', campaign_id);
-
-  const visibleCount = alreadyVisible?.length || 0;
-
-  // Get all pending prospects (have search_id, no email yet)
-  // Note: email can be null OR empty string "" — handle both
+  // Get pending — LIMIT to 10 per call to avoid timeout
   const { data: pending } = await supabaseAdmin
     .from('prospects')
-    .select('id, icypeas_search_id, fullname, company')
+    .select('id, icypeas_search_id')
+    .eq('campaign_id', campaign_id)
+    .not('icypeas_search_id', 'is', null)
+    .or('email.is.null,email.eq.')
+    .limit(10); // process 10 at a time
+
+  // Count total pending (for progress)
+  const { data: allPending } = await supabaseAdmin
+    .from('prospects')
+    .select('id', { count: 'exact' })
     .eq('campaign_id', campaign_id)
     .not('icypeas_search_id', 'is', null)
     .or('email.is.null,email.eq.');
+  const totalPending = allPending?.length || 0;
 
   if (!pending?.length) {
-    // No pending — check if we have enough visible
-    return res.status(200).json({
-      enriched: 0,
-      visible: visibleCount,
-      target,
-      pending: 0,
-      complete: visibleCount >= target,
-    });
+    return res.status(200).json({ enriched: 0, visible: visibleCount, target, pending: totalPending, complete: visibleCount >= target || totalPending === 0 });
   }
 
   let newlyFound = 0;
-  let stillPending = 0;
 
   for (const p of pending) {
     try {
@@ -80,44 +74,30 @@ export default async function handler(req, res) {
           }).eq('id', p.id);
           if (shouldReveal) newlyFound++;
         } else {
-          await supabaseAdmin.from('prospects').update({
-            email_cert: 'not_found',
-            icypeas_search_id: null,
-          }).eq('id', p.id);
+          await supabaseAdmin.from('prospects').update({ email_cert: 'not_found', icypeas_search_id: null }).eq('id', p.id);
         }
       } else if (status === 'NOT_FOUND') {
-        await supabaseAdmin.from('prospects').update({
-          email_cert: 'not_found',
-          icypeas_search_id: null,
-        }).eq('id', p.id);
+        await supabaseAdmin.from('prospects').update({ email_cert: 'not_found', icypeas_search_id: null }).eq('id', p.id);
       } else if (status === 'PENDING' || status === 'IN_PROGRESS' || !status) {
-        stillPending++;
+        // still waiting
       } else {
-        // Unknown status — mark done to unblock
-        await supabaseAdmin.from('prospects').update({
-          email_cert: 'not_found',
-          icypeas_search_id: null,
-        }).eq('id', p.id);
+        await supabaseAdmin.from('prospects').update({ email_cert: 'not_found', icypeas_search_id: null }).eq('id', p.id);
       }
-
-      await new Promise(r => setTimeout(r, 50)); // small delay between calls
-    } catch(e) {
-      stillPending++;
-    }
+    } catch(e) { /* continue */ }
   }
 
   const finalVisible = visibleCount + newlyFound;
   if (newlyFound > 0) {
-    await supabaseAdmin.from('campaigns').update({
-      prospects_count: finalVisible,
-    }).eq('id', campaign_id);
+    await supabaseAdmin.from('campaigns').update({ prospects_count: finalVisible }).eq('id', campaign_id);
   }
+
+  const remainingPending = totalPending - pending.length + (pending.filter(p => {/* was pending */}).length);
 
   return res.status(200).json({
     enriched: newlyFound,
     visible: finalVisible,
     target,
-    pending: stillPending,
-    complete: finalVisible >= target || (stillPending === 0 && finalVisible > 0),
+    pending: totalPending,
+    complete: finalVisible >= target || totalPending === 0,
   });
 }
