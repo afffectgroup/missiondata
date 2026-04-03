@@ -25,6 +25,23 @@ export default function CampaignPage() {
   const [showSeqWizard, setShowSeqWizard] = useState(false);
   const filtersInitialized = useRef(false);
   const [feLoading, setFeLoading] = useState({}); // { [prospectId]: 'email'|'phone'|'both' }
+  const [statusUpdating, setStatusUpdating] = useState({});
+  const [emailProgress, setEmailProgress] = useState(null); // { found, target }
+  const [credits, setCredits] = useState(null);
+
+  useEffect(() => {
+    async function fetchCredits() {
+      const FE_KEY = process.env.NEXT_PUBLIC_FULLENRICH_KEY; // won't work client-side
+      // Credits fetched via API instead
+      try {
+        const token = await getToken();
+        const r = await fetch('/api/prospects/credits', { headers: { Authorization: 'Bearer ' + token } });
+        const d = await r.json();
+        if (d.credits !== undefined) setCredits(d.credits);
+      } catch(e) {}
+    }
+    if (id && profile) fetchCredits();
+  }, [id, profile]);
   const [fePopover, setFePopover] = useState(null); // prospectId with open popover
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState('');
@@ -264,6 +281,18 @@ export default function CampaignPage() {
     }, 10000);
   }
 
+  async function updateStatus(prospectId, status) {
+    setStatusUpdating(p => ({ ...p, [prospectId]: true }));
+    const token = await getToken();
+    await fetch(`/api/prospects/${prospectId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    setProspects(ps => ps.map(p => p.id === prospectId ? { ...p, status } : p));
+    setStatusUpdating(p => { const n = {...p}; delete n[prospectId]; return n; });
+  }
+
   function exportCSV() {
     const rows = visibleProspects.map(p => [p.fullname, p.job_title, p.company, p.sector, p.email, p.email_cert, p.location, p.linkedin_url].map(v => `"${(v || '').replace(/"/g, '""')}"`).join(','));
     const csv = '\uFEFF' + ['Nom,Poste,Entreprise,Secteur,Email,Score,Localisation,LinkedIn', ...rows].join('\n');
@@ -478,10 +507,23 @@ export default function CampaignPage() {
                       </div>
                     </div>
                   </div>
-                  <button className={`btn btn-${visibleProspects.length ? 'ghost' : 'primary'} btn-sm`} onClick={runSearch} disabled={busy || !selectedTitles.length} style={{ flexShrink: 0 }}>
-                    {busy ? <div className="spinner" /> : null}
-                    {visibleProspects.length ? 'Relancer' : 'Lancer la recherche'}
-                  </button>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'8px', alignItems:'flex-end' }}>
+                    <button className={`btn btn-${visibleProspects.length ? 'ghost' : 'primary'} btn-sm`} onClick={runSearch} disabled={busy || !selectedTitles.length} style={{ flexShrink: 0 }}>
+                      {busy ? <div className="spinner" /> : null}
+                      {visibleProspects.length ? 'Relancer' : 'Lancer la recherche'}
+                    </button>
+                    {emailProgress && (
+                      <div style={{ width:'200px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:'var(--muted)', marginBottom:'4px' }}>
+                          <span>Emails trouvés</span>
+                          <span style={{ fontWeight:'600', color:'var(--mf-blue)' }}>{emailProgress.found}/{emailProgress.target}</span>
+                        </div>
+                        <div style={{ height:'6px', borderRadius:'99px', background:'var(--border)', overflow:'hidden' }}>
+                          <div style={{ height:'100%', borderRadius:'99px', background:'var(--mf-blue)', width: `${Math.min((emailProgress.found / emailProgress.target) * 100, 100)}%`, transition:'width .5s ease' }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -535,7 +577,12 @@ export default function CampaignPage() {
                   </span>
                 )}
               </h2>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems:'center', gap: '8px', flexWrap: 'wrap' }}>
+                {credits !== null && (
+                  <span style={{ fontSize:'11px', color:'var(--muted)', background:'var(--surface)', padding:'3px 8px', borderRadius:'20px', border:'1px solid var(--border)' }}>
+                    💳 {credits} crédit{credits > 1 ? 's' : ''} Source 2
+                  </span>
+                )}
                 {reserveWithEmail > 0 && <button className="btn btn-primary btn-sm" onClick={generateMore}>+ Générer plus ({reserveWithEmail} avec email)</button>}
                 {prospects.some(p => p.icypeas_search_id && !p.email && !p.reserve) && (
                   <button className="btn btn-ghost btn-sm" onClick={collectEmails} disabled={enriching}>
@@ -572,7 +619,7 @@ export default function CampaignPage() {
                       <th style={{ padding: '9px 12px', width: '36px' }}>
                         <input type="checkbox" checked={selected.length === visibleProspects.length && visibleProspects.length > 0} onChange={toggleAll} style={{ cursor: 'pointer', width: '14px', height: '14px' }} />
                       </th>
-                      {['Nom', 'Poste', 'Entreprise', 'Email', 'Mobile', 'Score', 'LinkedIn', ''].map(h => (
+                      {['Nom', 'Poste', 'Entreprise', 'Email', 'Mobile', 'Statut', 'Score', 'LinkedIn', ''].map(h => (
                         <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: '9px', fontWeight: '700', letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -635,6 +682,14 @@ export default function CampaignPage() {
                               </div>
                             )}
                           </div>
+                        </td>
+                        {/* Status */}
+                        <td style={{ padding: '6px 8px' }}>
+                          <StatusBadge
+                            status={p.status}
+                            loading={!!statusUpdating[p.id]}
+                            onChange={s => updateStatus(p.id, s)}
+                          />
                         </td>
                         {/* Mobile */}
                         <td style={{ padding: '9px 12px', fontFamily: 'JetBrains Mono,monospace', fontSize: '11px' }}>
@@ -1141,6 +1196,47 @@ function SectorSearch({ value, onChange }) {
               );
             })}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
+const STATUS_OPTIONS = [
+  { v: null,        l: '—',              bg: 'var(--surface)',   color: 'var(--muted)' },
+  { v: 'to_contact', l: '📋 À contacter', bg: '#eff6ff',        color: '#1d4ed8' },
+  { v: 'contacted',  l: '📤 Contacté',    bg: '#fefce8',        color: '#854d0e' },
+  { v: 'replied',    l: '✅ Répondu',      bg: '#f0fdf4',        color: '#15803d' },
+];
+
+function StatusBadge({ status, loading, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = STATUS_OPTIONS.find(s => s.v === status) || STATUS_OPTIONS[0];
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} disabled={loading}
+        style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'20px', fontSize:'11px', fontWeight:'500', cursor:'pointer', border:'1px solid transparent', background: current.bg, color: current.color, fontFamily:'inherit', whiteSpace:'nowrap' }}>
+        {loading ? <div className="spinner spinner-dark" style={{ width:'8px', height:'8px', borderWidth:'1.5px' }} /> : current.l}
+      </button>
+      {open && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'white', border:'1px solid var(--border)', borderRadius:'var(--r)', zIndex:200, boxShadow:'var(--shadow)', minWidth:'140px' }}>
+          {STATUS_OPTIONS.map(opt => (
+            <div key={String(opt.v)} onClick={() => { onChange(opt.v); setOpen(false); }}
+              style={{ padding:'7px 10px', fontSize:'12px', cursor:'pointer', background: status === opt.v ? 'var(--surface)' : 'white', fontWeight: status === opt.v ? '600' : '400' }}
+              onMouseOver={e => e.currentTarget.style.background = 'var(--surface)'}
+              onMouseOut={e => e.currentTarget.style.background = status === opt.v ? 'var(--surface)' : 'white'}>
+              {opt.l}
+            </div>
+          ))}
         </div>
       )}
     </div>
