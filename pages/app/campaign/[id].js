@@ -214,11 +214,10 @@ export default function CampaignPage() {
     setBusy(false);
     await load();
     // Start aggressive polling to collect emails (get fresh token)
-    const freshToken = await getToken();
-    startEmailPolling(id, d.target, freshToken);
+    startEmailPolling(id, d.target);
   }
 
-  function startEmailPolling(campaignId, target, token) {
+  function startEmailPolling(campaignId, target) {
     setPolling(true);
     setEmailProgress({ found: 0, target });
     let attempts = 0;
@@ -234,8 +233,7 @@ export default function CampaignPage() {
         return;
       }
       try {
-        const { data: ss } = await supabase.auth.getSession();
-        const pollToken = ss.session?.access_token || token;
+        const pollToken = await getToken();
         const r = await fetch('/api/prospects/enrich', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + pollToken, 'Content-Type': 'application/json' },
@@ -263,7 +261,7 @@ export default function CampaignPage() {
     }, 8000);
   }
 
-  function startEmailPolling(campaignId, target, token) {
+  function startEmailPolling(campaignId, target) {
     setPolling(true);
     setEmailProgress({ found: 0, target });
     let attempts = 0;
@@ -279,8 +277,7 @@ export default function CampaignPage() {
         return;
       }
       try {
-        const { data: ss } = await supabase.auth.getSession();
-        const pollToken = ss.session?.access_token || token;
+        const pollToken = await getToken();
         const r = await fetch('/api/prospects/enrich', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + pollToken, 'Content-Type': 'application/json' },
