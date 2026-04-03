@@ -27,15 +27,22 @@ export default async function handler(req, res) {
     .eq('campaign_id', campaign_id)
     .eq('reserve', false);
 
+  // Also count total scraped (for progress reporting)
+  const { data: allProspects } = await supabaseAdmin
+    .from('prospects')
+    .select('id')
+    .eq('campaign_id', campaign_id);
+
   const visibleCount = alreadyVisible?.length || 0;
 
   // Get all pending prospects (have search_id, no email yet)
+  // Note: email can be null OR empty string "" — handle both
   const { data: pending } = await supabaseAdmin
     .from('prospects')
     .select('id, icypeas_search_id, fullname, company')
     .eq('campaign_id', campaign_id)
     .not('icypeas_search_id', 'is', null)
-    .is('email', null);
+    .or('email.is.null,email.eq.');
 
   if (!pending?.length) {
     // No pending — check if we have enough visible
