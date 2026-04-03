@@ -23,6 +23,7 @@ export default function CampaignPage() {
   const [reserveWithEmail, setReserveWithEmail] = useState(0);
   const [polling, setPolling] = useState(false);
   const [showSeqWizard, setShowSeqWizard] = useState(false);
+  const filtersInitialized = useRef(false);
   const [feLoading, setFeLoading] = useState({}); // { [prospectId]: 'email'|'phone'|'both' }
   const [fePopover, setFePopover] = useState(null); // prospectId with open popover
   const [editingName, setEditingName] = useState(false);
@@ -160,8 +161,7 @@ export default function CampaignPage() {
   async function runSearch() {
     if (!selectedTitles.length) { showToast('Sélectionne au moins un poste.'); return; }
     setBusy(true);
-    addLog('Recherche Source 1 en cours…', 'inf');
-    addLog('Source 1 : enrichissement email en cours…', 'inf');
+    addLog('Recherche en cours…', 'inf');
     const token = await getToken();
 
     // Always use filters state (synced from DB on load)
@@ -179,22 +179,25 @@ export default function CampaignPage() {
       ...((filters.minTenure || filters.maxTenure) ? { currentJobTenure: { min: parseInt(filters.minTenure)||0, max: parseInt(filters.maxTenure)||120 } } : {}),
     };
 
+    const targetLimit = searchLimit || campaign.prospect_limit || 10;
     const r = await fetch('/api/prospects/search', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         campaign_id: id,
         query,
-        limit: searchLimit || campaign.prospect_limit || 10,
-        offset: Math.floor(Math.random() * 5) * (searchLimit || campaign.prospect_limit || 10),
+        limit: targetLimit,
+        offset: Math.floor(Math.random() * 3) * targetLimit,
       }),
     });
     const d = await r.json();
-    if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur Source 1 : ' + d.error); setBusy(false); return; }
-    addLog(`${d.saved} prospects affichés · ${d.reserve} en réserve · ${d.emails_submitted} emails en cours`, 'ok');
-    showToast(d.saved + ' prospects affichés · ' + d.reserve + ' en réserve · emails en cours...');
-    await load();
+    if (d.error) { addLog('Erreur : ' + d.error, 'err'); showToast('Erreur : ' + d.error); setBusy(false); return; }
+    addLog(`${d.scraped} profils scrapés · ${d.emails_submitted} recherches email lancées · cible : ${d.target} emails`, 'ok');
+    showToast(`Recherche lancée — en attente des emails (0/${d.target})...`);
     setBusy(false);
+    await load();
+    // Start aggressive polling to collect emails
+    startEmailPolling(id, d.target, token);
   }
 
   async function runSequences(freelanceProfile) {
@@ -520,19 +523,17 @@ export default function CampaignPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: '700', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
                 Base prospects ({visibleProspects.length})
-                {visibleProspects.length > 0 && (() => {
-                  const found = visibleProspects.filter(p => p.email).length;
-                  const notFound = visibleProspects.filter(p => p.email_cert === 'not_found').length;
-                  const pending = visibleProspects.filter(p => p.icypeas_search_id && !p.email && p.email_cert !== 'not_found').length;
-                  const pct = Math.round((found / visibleProspects.length) * 100);
-                  return (
-                    <span style={{ fontSize:'12px', fontWeight:'500', display:'inline-flex', alignItems:'center', gap:'8px' }}>
-                      <span style={{ color:'var(--mf-blue)' }}>✉ {found}/{visibleProspects.length} emails ({pct}%)</span>
-                      {notFound > 0 && <span style={{ color:'#ef4444' }}>· {notFound} non trouvé{notFound > 1 ? 's' : ''}</span>}
-                      {polling && <span style={{ color:'var(--muted)', display:'inline-flex', alignItems:'center', gap:'4px' }}><div className="spinner spinner-dark" style={{ width:'10px', height:'10px', borderWidth:'1.5px' }} /> {pending} en cours</span>}
-                    </span>
-                  );
-                })()}
+                {polling && (
+                  <span style={{ fontSize:'12px', fontWeight:'500', color:'var(--mf-blue)', display:'inline-flex', alignItems:'center', gap:'6px' }}>
+                    <div className="spinner spinner-dark" style={{ width:'10px', height:'10px', borderWidth:'1.5px' }} />
+                    Recherche emails en cours...
+                  </span>
+                )}
+                {!polling && visibleProspects.length > 0 && (
+                  <span style={{ fontSize:'12px', color:'var(--mf-blue)', fontWeight:'500' }}>
+                    ✉ {visibleProspects.filter(p=>p.email).length}/{visibleProspects.length} emails
+                  </span>
+                )}
               </h2>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {reserveWithEmail > 0 && <button className="btn btn-primary btn-sm" onClick={generateMore}>+ Générer plus ({reserveWithEmail} avec email)</button>}
