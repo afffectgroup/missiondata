@@ -213,8 +213,99 @@ export default function CampaignPage() {
     showToast(`Recherche lancée — en attente des emails (0/${d.target})...`);
     setBusy(false);
     await load();
-    // Start aggressive polling to collect emails
-    startEmailPolling(id, d.target, token);
+    // Start aggressive polling to collect emails (get fresh token)
+    const freshToken = await getToken();
+    startEmailPolling(id, d.target, freshToken);
+  }
+
+  function startEmailPolling(campaignId, target, token) {
+    setPolling(true);
+    setEmailProgress({ found: 0, target });
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        setPolling(false);
+        setEmailProgress(null);
+        addLog('Délai max atteint — relance si besoin', 'err');
+        return;
+      }
+      try {
+        const { data: ss } = await supabase.auth.getSession();
+        const pollToken = ss.session?.access_token || token;
+        const r = await fetch('/api/prospects/enrich', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + pollToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaign_id: campaignId, target }),
+        });
+        const d = await r.json();
+        if (d.error) return;
+
+        setEmailProgress({ found: d.visible || 0, target: d.target || target });
+
+        if (d.enriched > 0) {
+          await load();
+          addLog(`${d.visible}/${d.target} emails trouvés`, 'ok');
+        }
+
+        if (d.complete || (d.visible || 0) >= target) {
+          clearInterval(interval);
+          setPolling(false);
+          setEmailProgress(null);
+          await load();
+          showToast(`✅ ${d.visible}/${d.target} emails trouvés — base prête !`);
+          addLog(`Base prête : ${d.visible}/${d.target} emails`, 'ok');
+        }
+      } catch(e) {}
+    }, 8000);
+  }
+
+  function startEmailPolling(campaignId, target, token) {
+    setPolling(true);
+    setEmailProgress({ found: 0, target });
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        setPolling(false);
+        setEmailProgress(null);
+        addLog('Délai max atteint — relance la recherche si besoin', 'err');
+        return;
+      }
+      try {
+        const { data: ss } = await supabase.auth.getSession();
+        const pollToken = ss.session?.access_token || token;
+        const r = await fetch('/api/prospects/enrich', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + pollToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaign_id: campaignId, target }),
+        });
+        const d = await r.json();
+        if (d.error) { console.error('Poll error:', d.error); return; }
+
+        setEmailProgress({ found: d.visible || 0, target: d.target || target });
+
+        if (d.enriched > 0) {
+          await load();
+          addLog(`${d.visible}/${d.target} emails trouvés`, 'ok');
+        }
+
+        if (d.complete || (d.visible || 0) >= target) {
+          clearInterval(interval);
+          setPolling(false);
+          setEmailProgress(null);
+          await load();
+          showToast(`✅ ${d.visible}/${d.target} emails trouvés — base prête !`);
+          addLog(`Base prête : ${d.visible}/${d.target} emails`, 'ok');
+        }
+      } catch(e) { console.error('Poll error:', e); }
+    }, 8000);
   }
 
   async function runSequences(freelanceProfile) {
