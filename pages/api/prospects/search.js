@@ -1,4 +1,4 @@
-// pages/api/prospects/search.js
+// pages/api/prospects/search.js — email-first strategy
 import { requireAuth } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
 
@@ -17,10 +17,12 @@ export default async function handler(req, res) {
   if (!campaign_id) return res.status(400).json({ error: 'campaign_id requis.' });
 
   const ICYPEAS_KEY = process.env.ICYPEAS_API_KEY;
-  if (!ICYPEAS_KEY) return res.status(500).json({ error: 'Cle API manquante.' });
+  if (!ICYPEAS_KEY) return res.status(500).json({ error: 'Clé API manquante.' });
 
   const HEADERS = { 'Content-Type': 'application/json', 'Authorization': ICYPEAS_KEY };
-  const scrapeLimit = Math.min(limit * 3, 100);
+
+  // Scrape 5x to maximize email finds
+  const scrapeLimit = Math.min(limit * 5, 100);
 
   try {
     const data = await safeFetch('https://app.icypeas.com/api/find-people', {
@@ -33,11 +35,13 @@ export default async function handler(req, res) {
 
     const leads = data.leads || [];
     const total = data.total || leads.length;
-    if (!leads.length) return res.status(200).json({ saved: 0, total: 0, reserve: 0, emails_submitted: 0 });
+    if (!leads.length) return res.status(200).json({ saved: 0, total: 0, emails_submitted: 0 });
 
+    // Clear existing prospects for this campaign
     await supabaseAdmin.from('prospects').delete().eq('campaign_id', campaign_id);
 
-    const rows = leads.map((p, i) => ({
+    // Save ALL scraped leads — all hidden (reserve=true) until they get an email
+    const rows = leads.map((p) => ({
       campaign_id,
       user_id:      profile.id,
       fullname:     p.fullname || ((p.firstname || '') + ' ' + (p.lastname || '')).trim(),
@@ -49,16 +53,14 @@ export default async function handler(req, res) {
       linkedin_url: p.profileUrl || '',
       location:     p.address || '',
       source:       'source-1',
-      reserve:      i >= limit,
+      reserve:      true, // ALL start hidden — revealed only when email found
     }));
 
     const { data: saved } = await supabaseAdmin.from('prospects').insert(rows).select();
-    const visibleProspects = (saved || []).filter(p => !p.reserve);
-    const reserveProspects = (saved || []).filter(p => p.reserve);
 
-    // Auto-submit email ONLY for visible prospects (not reserve)
+    // Submit email search for ALL scraped prospects
     let emailsSubmitted = 0;
-    for (const prospect of visibleProspects) {
+    for (const prospect of (saved || [])) {
       try {
         const parts = (prospect.fullname || '').trim().split(' ');
         const firstname = parts[0] || '';
@@ -74,21 +76,23 @@ export default async function handler(req, res) {
           await supabaseAdmin.from('prospects').update({ icypeas_search_id: searchId }).eq('id', prospect.id);
           emailsSubmitted++;
         }
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 80));
       } catch(e) { /* continue */ }
     }
 
     await supabaseAdmin.from('campaigns').update({
-      prospects_count: visibleProspects.length,
+      prospects_count: 0, // Will update as emails come in
       updated_at: new Date().toISOString(),
     }).eq('id', campaign_id);
 
     return res.status(200).json({
-      saved: visibleProspects.length,
-      reserve: reserveProspects.length,
+      saved: 0, // nothing visible yet
       total,
+      scraped: (saved || []).length,
       emails_submitted: emailsSubmitted,
+      target: limit,
     });
+
   } catch(err) {
     return res.status(502).json({ error: err.message });
   }
