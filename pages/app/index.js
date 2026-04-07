@@ -268,7 +268,7 @@ export default function AppPage() {
         </div>
       </aside>
 
-      <main style={{ flex: 1, padding: '32px', overflowY: 'auto', maxWidth: '1100px' }}>
+      <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
           <div>
             <h1 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '2px' }}>Mes dossiers</h1>
@@ -290,27 +290,67 @@ export default function AppPage() {
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>Créer mon premier dossier</button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 100px 120px', gap: '16px', padding: '8px 16px', fontSize: '11px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              <span>Dossier</span><span>Secteur</span><span>Prospects</span><span>Séquences</span><span>Date</span>
+          <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+            {/* Header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 80px 110px 44px', padding: '10px 20px', fontSize: '10px', fontWeight: '700', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.7px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+              <span>Dossier</span>
+              <span>Secteur</span>
+              <span>Domaine</span>
+              <span style={{ textAlign:'center' }}>Prospects</span>
+              <span style={{ textAlign:'center' }}>Séquence</span>
+              <span>Date</span>
+              <span></span>
             </div>
-            {campaigns.map(c => (
+            {campaigns.map((c, i) => (
               <div key={c.id}
-                style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 100px 120px', gap: '16px', padding: '14px 16px', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--r)', alignItems: 'center', cursor: 'pointer', transition: 'border-color .15s' }}
-                onMouseOver={e => e.currentTarget.style.borderColor = 'var(--mf-blue)'}
-                onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 80px 110px 44px', padding: '0', background: 'white', borderBottom: i < campaigns.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'stretch', cursor: 'pointer', transition: 'background .1s' }}
+                onMouseOver={e => e.currentTarget.style.background = 'var(--mf-blue-lt)'}
+                onMouseOut={e => e.currentTarget.style.background = 'white'}
                 onClick={() => router.push(`/app/campaign/${c.id}`)}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '2px' }}>{c.name}</div>
-                  {c.client_location && <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{c.client_location}</div>}
+                {/* Nom */}
+                <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600' }}>{c.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {c.client_location && <span style={{ fontSize: '11px', color: 'var(--muted)' }}>📍 {c.client_location}</span>}
+                    <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '20px', fontWeight: '600',
+                      background: c.status === 'done' ? '#f0fdf4' : 'var(--surface)',
+                      color: c.status === 'done' ? '#15803d' : 'var(--muted)' }}>
+                      {c.status === 'done' ? 'Terminé' : 'Brouillon'}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{c.client_sector || '—'}</div>
-                <div>{c.prospects_count > 0 ? <span className="badge badge-blue">{c.prospects_count}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}</div>
-                <div>{c.sequences_count > 0 ? <span className="badge badge-green">{c.sequences_count}</span> : <span style={{ fontSize: '12px', color: 'var(--muted)' }}>—</span>}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* Secteur */}
+                <div style={{ padding: '14px 12px', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.client_sector || <span style={{ color: 'var(--border)' }}>—</span>}</span>
+                </div>
+                {/* Domaine */}
+                <div style={{ padding: '14px 12px', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.job_title_target || <span style={{ color: 'var(--border)' }}>—</span>}</span>
+                </div>
+                {/* Prospects */}
+                <div style={{ padding: '14px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {c.prospects_count > 0
+                    ? <span style={{ background: 'var(--mf-blue-lt)', color: 'var(--mf-blue)', borderRadius: '20px', padding: '3px 11px', fontSize: '12px', fontWeight: '700' }}>{c.prospects_count}</span>
+                    : <span style={{ color: 'var(--border)' }}>—</span>}
+                </div>
+                {/* Séquence */}
+                <div style={{ padding: '14px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {c.sequences_count > 0
+                    ? <span style={{ background: '#f0fdf4', color: '#15803d', borderRadius: '20px', padding: '3px 11px', fontSize: '12px', fontWeight: '700' }}>✓</span>
+                    : <span style={{ color: 'var(--border)' }}>—</span>}
+                </div>
+                {/* Date */}
+                <div style={{ padding: '14px 12px', display: 'flex', alignItems: 'center' }}>
                   <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
-                  <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={e => { e.stopPropagation(); deleteCampaign(c.id); }}>
-                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                </div>
+                {/* Supprimer */}
+                <div style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
+                  <button
+                    style={{ width: '30px', height: '30px', borderRadius: '6px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}
+                    onClick={e => { e.stopPropagation(); deleteCampaign(c.id); }}
+                    onMouseOver={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#ef4444'; }}
+                    onMouseOut={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted)'; }}>
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
                   </button>
                 </div>
               </div>
