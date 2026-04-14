@@ -92,24 +92,28 @@ export default function BasePage() {
   async function generate() {
     setRunning(true); setError('')
     try {
-      // 1. Fetch SIRENE from client (public API)
-      const params = new URLSearchParams({ per_page: base.n_companies || 10, page: 1 })
-      if (base.ape_code)      params.set('activite_principale', base.ape_code)
-      if (base.departement)   params.set('departement', base.departement)
-      if (base.effectif_code) params.set('tranche_effectif_salarie', base.effectif_code)
-
-      const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`)
-      if (!r.ok) throw new Error(`SIRENE API ${r.status}`)
-      const d = await r.json()
-      const companies = d.results || []
-
-      if (!companies.length) {
-        setError('Aucune entreprise trouvée pour ces critères. Essayez de changer le code APE, le département ou la taille.')
-        setRunning(false); return
-      }
-
-      // 2. Send to server → Icypeas
       const { data: { session } } = await supabase.auth.getSession()
+      let companies = []
+
+      if (base.mode !== 'international') {
+        // ── Mode France : fetch SIRENE depuis le client (API publique, pas de CORS) ──
+        const params = new URLSearchParams({ per_page: base.n_companies || 10, page: 1 })
+        if (base.ape_code)      params.set('activite_principale', base.ape_code)
+        if (base.departement)   params.set('departement', base.departement)
+        if (base.effectif_code) params.set('tranche_effectif_salarie', base.effectif_code)
+
+        const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`)
+        if (!r.ok) throw new Error(`SIRENE API ${r.status}`)
+        const d = await r.json()
+        companies = d.results || []
+
+        if (!companies.length) {
+          setError('Aucune entreprise SIRENE trouvée. Essayez de modifier le code APE, le département ou la taille.')
+          setRunning(false); return
+        }
+      }
+      // Mode International : companies = [] → le serveur fait Icypeas directement
+
       const resp = await fetch(`/api/bases/${id}/generate-contacts`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
@@ -178,7 +182,11 @@ export default function BasePage() {
 
         {/* Meta */}
         <div style={{ display:'flex', gap:8, marginTop:-8, marginBottom:24, flexWrap:'wrap', alignItems:'center' }}>
-          {[base.ape_label||base.client_sector, base.dept_label||base.client_location, base.effectif_label||base.client_size].filter(Boolean).map(t => (
+          {[
+            base.mode==='international' ? base.country_label : (base.ape_label||base.client_sector),
+            base.mode==='international' ? (base.intl_sector||base.client_sector) : (base.dept_label||base.client_location),
+            base.mode==='international' ? base.intl_city : (base.effectif_label||base.client_size),
+          ].filter(Boolean).map(t => (
             <span key={t} className="badge badge-new">{t}</span>
           ))}
           {base.job_titles && (

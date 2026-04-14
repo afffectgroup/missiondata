@@ -10,7 +10,8 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: 'Non authentifié' })
 
   const { id } = req.query
-  // companies: array passed from client (already fetched from SIRENE)
+  // France mode: companies from SIRENE (sent by client)
+  // International mode: no companies, direct Icypeas search
   const { companies = [] } = req.body || {}
 
   const admin = getSupabaseAdmin()
@@ -18,8 +19,10 @@ export default async function handler(req, res) {
   if (!base) return res.status(404).json({ error: 'Base introuvable' })
   if (base.user_id !== session.user.id) return res.status(403).json({ error: 'Accès refusé' })
 
+  const isFrance = base.mode !== 'international'
+
   async function push(msg, type = 'i', pct = null) {
-    const { data: cur } = await admin.from('campaigns').select('generation_logs, generation_pct').eq('id', id).single()
+    const { data: cur } = await admin.from('campaigns').select('generation_logs,generation_pct').eq('id', id).single()
     const logs = [...(cur?.generation_logs || []), { msg, type, ts: new Date().toLocaleTimeString('fr-FR') }]
     await admin.from('campaigns').update({ generation_logs: logs, ...(pct !== null ? { generation_pct: pct } : {}) }).eq('id', id)
   }
@@ -28,28 +31,49 @@ export default async function handler(req, res) {
   await admin.from('prospects').delete().eq('campaign_id', id)
 
   try {
-    const companyNames = companies.map(c => c.nom_raison_sociale).filter(Boolean)
     const titles = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
 
-    await push(`✓ ${companyNames.length} entreprises SIRENE reçues`, 's', 10)
-    await push(`Icypeas find-people — ${titles.join(', ')}`, 'i', 15)
+    let people = []
 
-    // Icypeas find-people by company names + job titles
-    const people = await findPeople({
-      currentCompanyName: { include: companyNames.slice(0, 25) },
-      currentJobTitle:    { include: titles },
-      location:           { include: ['FR'] },
-    }, 50)
+    if (isFrance) {
+      // ── Mode France : Icypeas find-people par noms d'entreprises SIRENE ──
+      const companyNames = companies.map(c => c.nom_raison_sociale).filter(Boolean)
+      await push(`✓ ${companyNames.length} entreprises SIRENE · ${titles.join(', ')}`, 's', 10)
+      await push('Icypeas find-people par entreprises…', 'i', 15)
 
-    await push(`✓ ${people.length} profils trouvés via Icypeas`, 's', 50)
+      people = await findPeople({
+        currentCompanyName: { include: companyNames.slice(0, 25) },
+        currentJobTitle:    { include: titles },
+        location:           { include: ['FR'] },
+      }, base.n_companies || 50)
+
+      await push(`✓ ${people.length} profils trouvés`, 's', 50)
+    } else {
+      // ── Mode International : Icypeas find-people direct ──
+      const country = base.country_code || 'FR'
+      const sector  = base.intl_sector  || ''
+      const city    = base.intl_city    || ''
+
+      await push(`Pays : ${base.country_label || country} · Secteur : ${sector}`, 'i', 5)
+      await push(`Icypeas find-people worldwide…`, 'i', 15)
+
+      const query = {
+        currentJobTitle: { include: titles },
+        location: { include: [city || country] },
+      }
+      if (sector) query.keyword = { include: [sector] }
+
+      people = await findPeople(query, base.n_companies || 50)
+      await push(`✓ ${people.length} profils trouvés`, 's', 50)
+    }
 
     if (!people.length) {
       await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
-      await push('Aucun profil correspondant. Essayez avec des critères plus larges.', 'w', 100)
+      await push('Aucun profil. Essayez avec des critères plus larges.', 'w', 100)
       return res.status(200).json({ contacts: [], count: 0 })
     }
 
-    // Build email search input
+    // ── Email enrichment (same for both modes) ──
     await push('Enrichissement emails Icypeas (bulk)…', 'i', 55)
     const emailInput = people
       .filter(p => p.lastCompanyWebsite || p.lastCompanyName)
@@ -63,17 +87,16 @@ export default async function handler(req, res) {
     const found = emailResults.filter(r => r.results?.emails?.[0]).length
     await push(`✓ ${found}/${emailResults.length} emails enrichis`, 's', 85)
 
-    // Build email map
     const emailMap = {}
     for (const r of emailResults) {
       const k = `${(r.results?.firstname||'').toLowerCase()}_${(r.results?.lastname||'').toLowerCase()}`
       if (r.results?.emails?.[0]) emailMap[k] = { email: r.results.emails[0].email, cert: r.results.emails[0].certainty }
     }
 
-    // Build SIRENE enrichment map
-    const sirenMap = Object.fromEntries(companies.map(c => [c.nom_raison_sociale?.toLowerCase(), c]))
+    const sirenMap = isFrance
+      ? Object.fromEntries(companies.map(c => [c.nom_raison_sociale?.toLowerCase(), c]))
+      : {}
 
-    // Assemble records
     const records = people.map(p => {
       const k = `${(p.firstname||'').toLowerCase()}_${(p.lastname||'').toLowerCase()}`
       const em = emailMap[k] || {}
@@ -84,25 +107,24 @@ export default async function handler(req, res) {
         fullname:     `${p.firstname} ${p.lastname}`,
         job_title:    p.lastJobTitle || p.headline || '',
         company:      p.lastCompanyName || '',
-        sector:       p.lastCompanyIndustry || base.ape_label || '',
+        sector:       p.lastCompanyIndustry || base.ape_label || base.intl_sector || '',
         email:        em.email || null,
         email_cert:   em.cert  || null,
         linkedin_url: p.profileUrl || null,
         location:     p.address || sirene.siege?.libelle_commune || null,
         source:       'icypeas',
-        // SIRENE enrichment
         ...(sirene.siren ? { notes: `SIREN:${sirene.siren}` } : {}),
       }
     })
 
     const { data: inserted } = await admin.from('prospects').insert(records).select()
-    await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: inserted?.length || 0 }).eq('id', id)
-    await push(`Pipeline terminé · ${inserted?.length} contacts sauvegardés`, 's', 100)
+    await admin.from('campaigns').update({ status:'done', generation_pct:100, prospects_count: inserted?.length || 0 }).eq('id', id)
+    await push(`✓ Pipeline terminé · ${inserted?.length} contacts sauvegardés`, 's', 100)
 
     res.status(200).json({ contacts: inserted, count: inserted?.length })
   } catch (err) {
     await push(`✗ ${err.message}`, 'e')
-    await admin.from('campaigns').update({ status: 'done', generation_pct: 0 }).eq('id', id)
+    await admin.from('campaigns').update({ status:'done', generation_pct:0 }).eq('id', id)
     res.status(500).json({ error: err.message })
   }
 }
