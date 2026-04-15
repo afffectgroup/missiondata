@@ -60,7 +60,15 @@ export default function BasePage() {
 
   useEffect(() => {
     if (!id || !user) return
-    fetchAll()
+    // Auto-start if redirected from creation with ?autostart=1
+    const autostart = router.query.autostart === '1'
+    fetchAll().then(() => {
+      if (autostart) {
+        // Remove param from URL then generate
+        router.replace(`/bases/${id}`, undefined, { shallow: true })
+        setTimeout(() => generate(), 300)
+      }
+    })
 
     // Supabase Realtime subscription
     const ch = supabase.channel(`base-${id}`)
