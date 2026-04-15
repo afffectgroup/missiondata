@@ -51,6 +51,8 @@ export default function BasePage() {
   const [contacts, setContacts] = useState([])
   const [loading, setLoading]   = useState(true)
   const [running, setRunning]   = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const [enrichResult, setEnrichResult] = useState(null)
   const [error, setError]       = useState('')
   const [search, setSearch]     = useState('')
 
@@ -130,6 +132,23 @@ export default function BasePage() {
     }
   }
 
+  async function enrichEmails() {
+    setEnriching(true); setEnrichResult(null); setError("")
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch(`/api/bases/${id}/enrich-emails`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || "Erreur")
+      setEnrichResult(d)
+      fetchContacts()
+    } catch (e) { setError(e.message) }
+    setEnriching(false)
+  }
+
+
   function exportCSV() {
     const h = ['Nom','Poste','Entreprise','Email','Certitude','LinkedIn','Ville']
     const rows = contacts.map(c => [c.fullname,c.job_title,c.company,c.email||'',c.email_cert||'',c.linkedin_url||'',c.location||''])
@@ -203,16 +222,24 @@ export default function BasePage() {
 
         {/* Actions bar */}
         {!isGenerating && (
-          <div style={{ display:'flex', gap:12, marginBottom:24, padding:'14px 18px', background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh1)', alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:10, marginBottom:20, padding:'14px 18px', background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh1)', alignItems:'center', flexWrap:'wrap' }}>
             <button className="btn btn-primary" onClick={generate}>
-              {contacts.length > 0 ? '↺ Régénérer' : '◎ Générer les contacts'}
+              {contacts.length > 0 ? '↺ Régénérer' : '◎ Trouver les contacts'}
             </button>
-            <div style={{ height:24, width:1, background:'var(--border)', margin:'0 4px' }} />
-            <div style={{ fontSize:12, color:'var(--t3)' }}>
-              SIRENE → Icypeas Find People → Email Search
-            </div>
+            <div style={{ height:24, width:1, background:'var(--border)' }} />
+            <button className="btn btn-secondary" onClick={enrichEmails}
+              disabled={enriching || contacts.length === 0}>
+              {enriching
+                ? <><span className="spinner" style={{ width:14, height:14 }} /> Enrichissement…</>
+                : '✉ Enrichir les emails'}
+            </button>
+            {enrichResult && (
+              <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
+                ✓ {enrichResult.enriched}/{enrichResult.total} emails trouvés
+              </span>
+            )}
             <div style={{ marginLeft:'auto', fontFamily:'var(--fm)', fontSize:12, color:'var(--t3)' }}>
-              {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+              {contacts.length} contact{contacts.length !== 1 ? 's' : ''} · {contacts.filter(c=>c.email).length} emails
             </div>
           </div>
         )}
