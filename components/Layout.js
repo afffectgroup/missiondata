@@ -53,7 +53,7 @@ export default function Layout({ children, title, action }) {
                   </div>
                 </div>
               </div>
-              <div style={{ fontFamily: 'var(--fm)', fontSize: 9.5, color: 'rgba(162,214,226,.35)', letterSpacing: '.1em', textTransform: 'uppercase', marginTop: 6 }}>
+              <div style={{ fontFamily: 'var(--fm)', fontSize: 9.5, color: 'rgba(162,214,226,.6)', letterSpacing: '.1em', textTransform: 'uppercase', marginTop: 6 }}>
                 B2B Intelligence
               </div>
             </div>
@@ -70,11 +70,11 @@ export default function Layout({ children, title, action }) {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '9px 12px', borderRadius: 'var(--r-md)',
                   background: active ? 'rgba(162,214,226,.1)' : 'transparent',
-                  color: active ? 'var(--brand-lt)' : 'rgba(255,255,255,.42)',
+                  color: active ? 'var(--brand-lt)' : 'rgba(255,255,255,.75)',
                   fontSize: 13.5, fontWeight: active ? 600 : 400,
                   cursor: item.soon ? 'default' : 'pointer', transition: 'all .14s',
                 }}
-                  onMouseEnter={e => !active && !item.soon && (e.currentTarget.style.background = 'rgba(255,255,255,.05)')}
+                  onMouseEnter={e => !active && !item.soon && (e.currentTarget.style.background = 'rgba(255,255,255,.07)')}
                   onMouseLeave={e => !active && (e.currentTarget.style.background = 'transparent')}
                 >
                   <span>{item.label}</span>
@@ -100,7 +100,7 @@ export default function Layout({ children, title, action }) {
                   display: 'flex', alignItems: 'center', padding: '9px 12px',
                   borderRadius: 'var(--r-md)',
                   background: router.pathname.startsWith('/admin') ? 'rgba(239,68,68,.1)' : 'transparent',
-                  color: router.pathname.startsWith('/admin') ? '#FCA5A5' : 'rgba(255,255,255,.28)',
+                  color: router.pathname.startsWith('/admin') ? '#FCA5A5' : 'rgba(255,255,255,.65)',
                   fontSize: 13.5, cursor: 'pointer', transition: 'all .14s',
                 }}>
                   Admin
@@ -120,7 +120,7 @@ export default function Layout({ children, title, action }) {
               <path d="M1 6 C1 3.24 3.24 1 6 1 C8.76 1 11 3.24 11 6 C11 8.76 8.76 11 6 11 C3.24 11 1 8.76 1 6Z" stroke="rgba(255,255,255,.25)" strokeWidth="1.2" fill="none"/>
               <path d="M4 6 H8 M6.5 4.5 L8 6 L6.5 7.5" stroke="rgba(255,255,255,.25)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,.28)', fontFamily: 'var(--fm)' }}>
+            <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,.55)', fontFamily: 'var(--fm)' }}>
               Mission Freelances ↗
             </span>
           </a>
@@ -136,18 +136,18 @@ export default function Layout({ children, title, action }) {
               fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0,
             }}>{initials}</div>
             <div style={{ overflow: 'hidden', minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,.72)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,.88)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {profile?.full_name || profile?.email?.split('@')[0] || '—'}
               </div>
-              <div style={{ fontFamily: 'var(--fm)', fontSize: 10, color: 'rgba(255,255,255,.28)', marginTop: 1 }}>
+              <div style={{ fontFamily: 'var(--fm)', fontSize: 10, color: 'rgba(255,255,255,.5)', marginTop: 1 }}>
                 {profile?.role || 'user'}
               </div>
             </div>
           </div>
           <button onClick={() => signOut().then(() => router.push('/'))}
-            style={{ width: '100%', padding: '7px 12px', borderRadius: 'var(--r-md)', fontSize: 12, color: 'rgba(255,255,255,.3)', background: 'transparent', border: '1px solid rgba(255,255,255,.08)', fontFamily: 'var(--fb)', cursor: 'pointer', transition: 'all .14s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.16)'; e.currentTarget.style.color = 'rgba(255,255,255,.5)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = 'rgba(255,255,255,.3)' }}>
+            style={{ width: '100%', padding: '7px 12px', borderRadius: 'var(--r-md)', fontSize: 12, color: 'rgba(255,255,255,.55)', background: 'transparent', border: '1px solid rgba(255,255,255,.14)', fontFamily: 'var(--fb)', cursor: 'pointer', transition: 'all .14s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.25)'; e.currentTarget.style.color = 'rgba(255,255,255,.75)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = 'rgba(255,255,255,.55)' }}>
             Déconnexion
           </button>
         </div>

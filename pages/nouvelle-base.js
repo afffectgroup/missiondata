@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import Head from 'next/head'
@@ -36,19 +36,21 @@ const DEPTS_RAW = [
   ["971","Guadeloupe"],["972","Martinique"],["973","Guyane"],
   ["974","La Réunion"],["976","Mayotte"],
 ]
-const DEPTS = DEPTS_RAW.map(([code, nom]) => ({ code, label:`${nom} (${code})`, nom }))
+const ALL_DEPTS = [
+  { code: '', nom: 'Toute la France' },
+  ...DEPTS_RAW.map(([code, nom]) => ({ code, nom }))
+]
 
 const NAF_SECTORS = {
   "💻 Tech & Numérique": [
     ["62.01Z","Programmation informatique"],["62.02A","Conseil SI"],
-    ["62.09Z","Autres activités informatiques"],["63.11Z","Data / Cloud / Hébergement"],
-    ["63.12Z","Portails Internet"],["58.29C","Logiciels applicatifs (SaaS)"],
-    ["61.20Z","Télécommunications sans fil"],["61.10Z","Télécommunications filaires"],
+    ["62.09Z","Autres activités info."],["63.11Z","Data / Cloud / SaaS"],
+    ["63.12Z","Portails Internet"],["58.29C","Logiciels applicatifs"],
+    ["61.20Z","Télécommunications sans fil"],
   ],
   "📣 Communication & Marketing": [
     ["73.11Z","Agences de publicité"],["73.12Z","Régies publicitaires"],
-    ["73.20Z","Études de marché"],["70.21Z","Relations publiques / RP"],
-    ["58.13Z","Presse"],["60.20A","Chaînes TV"],
+    ["73.20Z","Études de marché"],["70.21Z","Relations publiques"],
   ],
   "💼 Conseil & Management": [
     ["70.22Z","Conseil en management"],["69.10Z","Juridique"],
@@ -64,44 +66,35 @@ const NAF_SECTORS = {
   "🏦 Finance & Assurance": [
     ["64.19Z","Banques"],["65.11Z","Assurance vie"],
     ["65.12Z","Autres assurances"],["66.12Z","Courtage"],
-    ["66.22Z","Courtiers assurance"],["66.30Z","Gestion de fonds"],
+    ["66.22Z","Courtiers assurance"],
   ],
   "🏠 Immobilier": [
     ["41.10A","Promotion immobilière"],["68.31Z","Agences immobilières"],
-    ["68.20A","Location logements"],["68.32A","Gestion de copropriété"],
+    ["68.20A","Location logements"],
   ],
   "👥 RH & Recrutement": [
     ["78.10Z","Recrutement / Chasse"],["78.20Z","Travail temporaire"],
-    ["82.20Z","Centres d'appels"],["82.30Z","Événementiel / Congrès"],
+    ["82.30Z","Événementiel / Congrès"],
   ],
   "🎨 Design & Création": [
     ["74.10Z","Design graphique / UX"],["74.20Z","Photographie"],
-    ["74.30Z","Traduction"],["59.11B","Production films / vidéo"],
-    ["90.03A","Arts et création"],
+    ["59.11B","Production films / vidéo"],
   ],
   "🏗️ BTP & Construction": [
     ["41.20B","Construction bâtiments"],["43.21A","Électricité"],
-    ["43.22A","Plomberie / chauffage"],["43.34Z","Peinture"],
+    ["43.22A","Plomberie / chauffage"],
   ],
   "🍽️ Restauration & Hôtellerie": [
     ["55.10Z","Hôtels"],["56.10A","Restauration traditionnelle"],
-    ["56.10C","Restauration rapide"],["56.29A","Restauration collective"],
-  ],
-  "🛒 E-commerce & Distribution": [
-    ["47.91B","Commerce en ligne"],["46.51Z","Informatique en gros"],
-    ["46.90Z","Commerce de gros divers"],
-  ],
-  "🎓 Formation & Éducation": [
-    ["85.42Z","Enseignement supérieur"],["85.59A","Formation continue"],
-    ["85.59B","Autres formations"],
+    ["56.10C","Restauration rapide"],
   ],
   "🌿 Luxe & Mode": [
     ["32.12Z","Bijouterie / joaillerie"],["15.12Z","Maroquinerie"],
     ["14.19Z","Mode / vêtements"],["11.02A","Vins & spiritueux"],
   ],
   "⚙️ Services B2B": [
-    ["82.99Z","Services B2B divers"],["81.21Z","Nettoyage / facility"],
-    ["80.10Z","Sécurité privée"],["82.11Z","Services administratifs"],
+    ["82.99Z","Services B2B divers"],["82.11Z","Services administratifs"],
+    ["80.10Z","Sécurité privée"],
   ],
 }
 const APE_FLAT = Object.entries(NAF_SECTORS).flatMap(([cat, codes]) =>
@@ -109,10 +102,23 @@ const APE_FLAT = Object.entries(NAF_SECTORS).flatMap(([cat, codes]) =>
 )
 
 const EFFECTIFS = [
-  { code:'', label:'Toutes tailles' },
-  { code:'11', label:'10 – 19 sal.' }, { code:'12', label:'20 – 49 sal.' },
-  { code:'21', label:'50 – 99 sal.' }, { code:'22', label:'100 – 199 sal.' },
-  { code:'31', label:'200 – 249 sal.' }, { code:'32', label:'250 – 499 sal.' },
+  { code:'11', label:'10 – 19' },
+  { code:'12', label:'20 – 49' },
+  { code:'21', label:'50 – 99' },
+  { code:'22', label:'100 – 199' },
+  { code:'31', label:'200 – 249' },
+  { code:'32', label:'250 – 499' },
+]
+
+const JOB_PRESETS = [
+  { label:'DG / CEO',           v:'Directeur Général, CEO, DG, Président' },
+  { label:'Dir. Marketing',     v:'Directeur Marketing, CMO, VP Marketing' },
+  { label:'Dir. Commercial',    v:'Directeur Commercial, VP Sales, CSO' },
+  { label:'Dir. Communication', v:'Directeur Communication, Head of Communications' },
+  { label:'Head of Growth',     v:'Head of Growth, Growth Manager' },
+  { label:'Head of Sales',      v:'Head of Sales, Sales Director' },
+  { label:'DRH / CPO',          v:'DRH, Chief People Officer' },
+  { label:'CTO / DSI',          v:'CTO, Directeur Technique, DSI' },
 ]
 
 const COUNTRIES = [
@@ -123,30 +129,61 @@ const COUNTRIES = [
   { code:'US', label:'États-Unis 🇺🇸' }, { code:'CA', label:'Canada 🇨🇦' },
   { code:'MA', label:'Maroc 🇲🇦' }, { code:'TN', label:'Tunisie 🇹🇳' },
   { code:'SG', label:'Singapour 🇸🇬' }, { code:'AE', label:'Émirats 🇦🇪' },
-  { code:'AU', label:'Australie 🇦🇺' },
 ]
 
-const JOB_PRESETS = [
-  { label:'DG / CEO',           v:'Directeur Général, CEO, DG, Président' },
-  { label:'Dir. Marketing',     v:'Directeur Marketing, CMO, VP Marketing' },
-  { label:'Dir. Commercial',    v:'Directeur Commercial, VP Sales, CSO' },
-  { label:'Dir. Communication', v:'Directeur Communication, Head of Communications' },
-  { label:'Head of Growth',     v:'Head of Growth, Growth Manager, VP Growth' },
-  { label:'Head of Sales',      v:'Head of Sales, Sales Director, Sales Manager' },
-  { label:'DRH / CPO',          v:'DRH, Directeur RH, Chief People Officer' },
-  { label:'CTO / DSI',          v:'CTO, Directeur Technique, DSI' },
-]
+/* ── Multi-select tag component ── */
+function TagInput({ placeholder, tags, onAdd, onRemove, suggestions, label, source, sourceUrl }) {
+  const [q, setQ] = useState('')
+  const filtered = useMemo(() => {
+    if (!q || q.length < 2) return []
+    const s = q.toLowerCase()
+    return suggestions
+      .filter(x => !tags.find(t => t.code === x.code))
+      .filter(x => x.label.toLowerCase().includes(s) || x.code?.toLowerCase().includes(s) || x.nom?.toLowerCase().includes(s))
+      .slice(0, 8)
+  }, [q, suggestions, tags])
 
-/* ── Chip button ── */
-function Chip({ active, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} style={{
-      padding:'6px 14px', borderRadius:20, fontSize:13, fontWeight:500,
-      cursor:'pointer', transition:'all .12s',
-      border:`1px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
-      background: active ? 'var(--brand)' : 'var(--white)',
-      color: active ? 'white' : 'var(--t2)',
-    }}>{children}</button>
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <label className="label" style={{ margin:0 }}>{label}</label>
+        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize:10, color:'var(--ab)', fontFamily:'var(--fm)' }}>{source} ↗</a>}
+      </div>
+      {/* Tags sélectionnés */}
+      {tags.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+          {tags.map(t => (
+            <span key={t.code || t.nom} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 10px', background:'var(--brand)', color:'white', borderRadius:20, fontSize:12, fontWeight:500 }}>
+              {t.label || `${t.nom} (${t.code})`}
+              <button onClick={() => onRemove(t)} style={{ background:'none', border:'none', color:'rgba(255,255,255,.8)', cursor:'pointer', padding:0, fontSize:14, lineHeight:1, display:'flex', alignItems:'center' }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Input recherche */}
+      <div style={{ position:'relative' }}>
+        <input
+          value={q} onChange={e => setQ(e.target.value)}
+          placeholder={tags.length > 0 ? `+ Ajouter ${placeholder}` : placeholder}
+          style={{ width:'100%', padding:'9px 13px', border:'1px solid var(--border)', borderRadius:'var(--r-md)', fontSize:13, fontFamily:'var(--fb)', outline:'none', background:'var(--white)', color:'var(--text)' }}
+        />
+        {filtered.length > 0 && (
+          <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:'var(--r-md)', boxShadow:'var(--sh2)', zIndex:100, marginTop:4, maxHeight:240, overflowY:'auto' }}>
+            {filtered.map(s => (
+              <button key={s.code || s.nom} onClick={() => { onAdd(s); setQ('') }}
+                style={{ width:'100%', padding:'9px 14px', textAlign:'left', background:'none', border:'none', borderBottom:'1px solid var(--border2)', cursor:'pointer', fontSize:13, color:'var(--text)', display:'flex', gap:10, alignItems:'center', fontFamily:'var(--fb)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                {s.code && <span style={{ fontFamily:'var(--fm)', fontSize:11, color:'var(--t3)', flexShrink:0 }}>{s.code}</span>}
+                <span>{s.label || s.nom}</span>
+                {s.cat && <span style={{ fontSize:10, color:'var(--t4)', marginLeft:'auto' }}>{s.cat}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {tags.length === 0 && <div style={{ fontSize:11, color:'var(--t3)', marginTop:5 }}>Tapez au moins 2 caractères pour rechercher</div>}
+    </div>
   )
 }
 
@@ -155,38 +192,85 @@ export default function NouvelleBase() {
   const supabase = useSupabaseClient()
   const { user } = useAuth()
 
-  const [mode, setMode]         = useState('france')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState('')
-  const [apeSearch, setApeSearch]   = useState('')
-  const [deptSearch, setDeptSearch] = useState('')
+  const [mode, setMode]     = useState('france')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
 
   const [form, setForm] = useState({
-    name:'', ape:'73.11Z', dept:'75', effectif:'12',
-    jobTitles:'', nCompanies:10,
-    country:'BE', intlSector:'SaaS / Tech', intlCity:'', companySize:'',
+    name: '',
+    // France multi-select
+    apes:      [],  // [{code, label}]
+    depts:     [],  // [{code, nom}] — empty array = toute la France
+    effectifs: [],  // [{code, label}]
+    jobTitles: '',
+    nCompanies: 10,
+    // International
+    country: 'BE', intlSector: 'SaaS / Tech', intlCity: '', companySize: '',
   })
 
-  const sf = k => v => setForm(f => ({ ...f, [k]: v?.target ? v.target.value : v }))
+  // ── APE helpers
+  const addApe    = useCallback(a => setForm(f => ({ ...f, apes: [...f.apes.filter(x => x.code !== a.code), a] })), [])
+  const removeApe = useCallback(a => setForm(f => ({ ...f, apes: f.apes.filter(x => x.code !== a.code) })), [])
 
-  const filteredAPE = useMemo(() => {
-    if (!apeSearch) return null
-    const s = apeSearch.toLowerCase()
-    return APE_FLAT.filter(a => a.code.toLowerCase().includes(s) || a.label.toLowerCase().includes(s))
-  }, [apeSearch])
+  // ── Dept helpers
+  const addDept    = useCallback(d => {
+    // Sélectionner "Toute la France" = vider les depts spécifiques
+    if (d.code === '') return setForm(f => ({ ...f, depts: [] }))
+    setForm(f => ({ ...f, depts: [...f.depts.filter(x => x.code !== d.code), d] }))
+  }, [])
+  const removeDept = useCallback(d => setForm(f => ({ ...f, depts: f.depts.filter(x => x.code !== d.code) })), [])
 
-  const filteredDepts = useMemo(() => {
-    if (!deptSearch) return DEPTS
-    const s = deptSearch.toLowerCase()
-    return DEPTS.filter(d => d.nom.toLowerCase().includes(s) || d.code.includes(s))
-  }, [deptSearch])
+  // ── Effectif toggle
+  const toggleEffectif = useCallback(e => {
+    setForm(f => ({
+      ...f,
+      effectifs: f.effectifs.find(x => x.code === e.code)
+        ? f.effectifs.filter(x => x.code !== e.code)
+        : [...f.effectifs, e]
+    }))
+  }, [])
 
-  const apeInfo     = APE_FLAT.find(a => a.code === form.ape)
-  const deptInfo    = DEPTS.find(d => d.code === form.dept)
-  const effInfo     = EFFECTIFS.find(e => e.code === form.effectif)
-  const countryInfo = COUNTRIES.find(c => c.code === form.country)
+  // ── Job titles: presets are cumulative
+  const togglePreset = useCallback(preset => {
+    setForm(f => {
+      const current = f.jobTitles.split(',').map(s => s.trim()).filter(Boolean)
+      const presetTitles = preset.v.split(',').map(s => s.trim())
+      const allPresent = presetTitles.every(pt => current.includes(pt))
+      if (allPresent) {
+        // Remove preset titles
+        const updated = current.filter(t => !presetTitles.includes(t))
+        return { ...f, jobTitles: updated.join(', ') }
+      } else {
+        // Add preset titles (deduplicated)
+        const merged = [...new Set([...current, ...presetTitles])]
+        return { ...f, jobTitles: merged.join(', ') }
+      }
+    })
+  }, [])
+
+  const isPresetActive = useCallback(preset => {
+    const current = form.jobTitles.split(',').map(s => s.trim())
+    return preset.v.split(',').map(s => s.trim()).every(pt => current.includes(pt))
+  }, [form.jobTitles])
+
   const isFrance    = mode === 'france'
-  const canSubmit   = form.name.trim() && form.jobTitles.trim()
+  const countryInfo = COUNTRIES.find(c => c.code === form.country)
+  const canSubmit   = form.name.trim() && form.jobTitles.trim() && (
+    isFrance ? form.apes.length > 0 : true
+  )
+
+  // Summary
+  const summary = useMemo(() => {
+    if (!canSubmit) return null
+    const job = form.jobTitles.split(',')[0]?.trim()
+    if (isFrance) {
+      const apeStr  = form.apes.length === 1 ? form.apes[0].label : `${form.apes.length} secteurs`
+      const deptStr = form.depts.length === 0 ? 'toute la France' : form.depts.length === 1 ? form.depts[0].nom : `${form.depts.length} départements`
+      const effStr  = form.effectifs.length === 0 ? 'toutes tailles' : form.effectifs.map(e => e.label).join(', ') + ' sal.'
+      return `${job} · ${apeStr} · ${deptStr} · ${effStr}`
+    }
+    return `${job} · ${form.intlSector} · ${countryInfo?.label}`
+  }, [form, canSubmit, isFrance, countryInfo])
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -199,16 +283,17 @@ export default function NouvelleBase() {
         mode,
         job_titles:  form.jobTitles,
         n_companies: form.nCompanies,
-        // France
         ...(isFrance ? {
-          ape_code:      form.ape,
-          ape_label:     apeInfo?.label || '',
-          departement:   form.dept,
-          dept_label:    deptInfo?.nom || '',
-          effectif_code: form.effectif,
-          effectif_label:effInfo?.label || '',
-          client_sector: apeInfo?.label || '',
-          client_location: deptInfo?.nom || '',
+          // Store as comma-separated for SIRENE calls
+          ape_code:       form.apes.map(a => a.code).join(','),
+          ape_label:      form.apes.map(a => a.label).join(', '),
+          departement:    form.depts.map(d => d.code).join(','),
+          dept_label:     form.depts.map(d => d.nom).join(', ') || 'Toute la France',
+          effectif_code:  form.effectifs.map(e => e.code).join(','),
+          effectif_label: form.effectifs.map(e => e.label).join(', ') || 'Toutes tailles',
+          client_sector:  form.apes.map(a => a.label).join(', '),
+          client_location:form.depts.map(d => d.nom).join(', ') || 'Toute la France',
+          client_size:    form.effectifs.map(e => e.label).join(', '),
         } : {
           country_code:  form.country,
           country_label: countryInfo?.label || '',
@@ -221,12 +306,9 @@ export default function NouvelleBase() {
         client_need: form.jobTitles,
       }).select().single()
       if (error) throw error
-      // ── Redirect + auto-start flag ──
       router.push(`/bases/${data.id}?autostart=1`)
     } catch(e) { setError(e.message); setSaving(false) }
   }
-
-  const sel = { width:'100%', padding:'9px 12px', border:'1px solid var(--border)', borderRadius:8, fontSize:13, background:'var(--white)', color:'var(--text)', outline:'none' }
 
   return (
     <>
@@ -236,12 +318,8 @@ export default function NouvelleBase() {
           <Link href="/dashboard">
             <button className="btn btn-ghost btn-sm" style={{ marginBottom:16 }}>← Retour</button>
           </Link>
-          <h1 style={{ fontFamily:'var(--fd)', fontSize:24, fontWeight:800, letterSpacing:'-.02em', marginBottom:4 }}>
-            Nouvelle base
-          </h1>
-          <p style={{ fontSize:13, color:'var(--t3)', marginBottom:20 }}>
-            Configurez votre ciblage — Mission Data génère les contacts automatiquement.
-          </p>
+          <h1 style={{ fontFamily:'var(--fd)', fontSize:24, fontWeight:800, letterSpacing:'-.02em', marginBottom:4 }}>Nouvelle base</h1>
+          <p style={{ fontSize:13, color:'var(--t3)', marginBottom:20 }}>Configurez votre ciblage — plusieurs secteurs, zones et personas possibles.</p>
 
           {error && <div className="alert alert-error" style={{ marginBottom:16 }}>⚠ {error}</div>}
 
@@ -251,96 +329,101 @@ export default function NouvelleBase() {
               <label className="label">Nom de la base</label>
               <input className="input" value={form.name}
                 onChange={e => setForm(f => ({...f, name:e.target.value}))}
-                placeholder="Ex : Agences pub Paris · DG · Avril 2026"
-                autoFocus />
+                placeholder="Ex : Cosmétique France · DG + CMO · Avril 2026" autoFocus />
             </div>
           </div>
 
-          {/* Mode */}
+          {/* Mode France / International */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
             {[
-              { v:'france', icon:'🇫🇷', title:'France', sub:'SIRENE + APE + département' },
+              { v:'france', icon:'🇫🇷', title:'France', sub:'SIRENE · APE · INSEE' },
               { v:'international', icon:'🌍', title:'International', sub:'Icypeas worldwide' },
             ].map(m => (
               <button key={m.v} onClick={() => setMode(m.v)} style={{
                 padding:'14px 18px', borderRadius:10, textAlign:'left', cursor:'pointer',
                 border:`2px solid ${mode===m.v ? 'var(--brand)' : 'var(--border)'}`,
-                background: mode===m.v ? 'var(--bg2)' : 'var(--white)',
-                transition:'all .14s',
+                background: mode===m.v ? 'var(--bg2-data)' : 'var(--white)',
+                transition:'all .14s', fontFamily:'var(--fb)',
               }}>
                 <div style={{ fontSize:20, marginBottom:4 }}>{m.icon}</div>
-                <div style={{ fontWeight:700, color: mode===m.v ? 'var(--brand)' : 'var(--text)', fontSize:14 }}>{m.title}</div>
+                <div style={{ fontFamily:'var(--fd)', fontWeight:700, color:mode===m.v?'var(--brand)':'var(--text)', fontSize:14 }}>{m.title}</div>
                 <div style={{ fontSize:11, color:'var(--t3)', marginTop:2 }}>{m.sub}</div>
               </button>
             ))}
           </div>
 
-          {/* Filtres France */}
+          {/* ── FRANCE ── */}
           {isFrance && (
-            <div className="card" style={{ padding:'20px 24px', marginBottom:12 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
-                <div>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                    <label className="label" style={{ margin:0 }}>Secteur APE</label>
-                    <a href="https://www.data.gouv.fr/datasets/codes-et-libelles-naf-niveau-2" target="_blank" rel="noreferrer" style={{ fontSize:10, color:'var(--ab)' }}>INSEE NAF ↗</a>
-                  </div>
-                  <input placeholder="Rechercher…" value={apeSearch} onChange={e => setApeSearch(e.target.value)}
-                    style={{ ...sel, marginBottom:6, fontSize:12 }} />
-                  {filteredAPE ? (
-                    <select style={sel} value={form.ape}
-                      onChange={e => { setForm(f=>({...f,ape:e.target.value})); setApeSearch('') }}>
-                      {filteredAPE.length === 0
-                        ? <option>Aucun résultat</option>
-                        : filteredAPE.map(a => <option key={a.code} value={a.code}>{a.code} — {a.label}</option>)}
-                    </select>
-                  ) : (
-                    <select style={sel} value={form.ape} onChange={e => setForm(f=>({...f,ape:e.target.value}))}>
-                      {Object.entries(NAF_SECTORS).map(([cat, codes]) => (
-                        <optgroup key={cat} label={cat}>
-                          {codes.map(([code,label]) => <option key={code} value={code}>{code} — {label}</option>)}
-                        </optgroup>
-                      ))}
-                    </select>
-                  )}
-                  {apeInfo && <div style={{ fontSize:11, color:'var(--brand-mid)', marginTop:4 }}>✓ {apeInfo.label}</div>}
-                </div>
+            <div className="card" style={{ padding:'20px 24px', marginBottom:12, display:'flex', flexDirection:'column', gap:20 }}>
 
-                <div>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                    <label className="label" style={{ margin:0 }}>Département</label>
-                    <a href="https://www.data.gouv.fr/datasets/code-officiel-geographique-cog" target="_blank" rel="noreferrer" style={{ fontSize:10, color:'var(--ab)' }}>INSEE COG ↗</a>
-                  </div>
-                  <input placeholder="Rechercher…" value={deptSearch} onChange={e => setDeptSearch(e.target.value)}
-                    style={{ ...sel, marginBottom:6, fontSize:12 }} />
-                  <select style={sel} value={form.dept}
-                    onChange={e => { setForm(f=>({...f,dept:e.target.value})); setDeptSearch('') }}>
-                    {filteredDepts.map(d => <option key={d.code} value={d.code}>{d.label}</option>)}
-                  </select>
-                  {deptInfo && <div style={{ fontSize:11, color:'var(--brand-mid)', marginTop:4 }}>✓ {deptInfo.nom}</div>}
+              {/* APE multi */}
+              <TagInput
+                label="Secteurs APE" source="INSEE NAF" sourceUrl="https://www.data.gouv.fr/datasets/codes-et-libelles-naf-niveau-2"
+                placeholder="Rechercher un secteur (ex: pub, cosm, conseil…)"
+                tags={form.apes.map(a => ({ ...a, label: `${a.code} — ${a.label}` }))}
+                suggestions={APE_FLAT.map(a => ({ ...a, label: `${a.label}` }))}
+                onAdd={a => addApe({ code: a.code, label: a.label })}
+                onRemove={a => removeApe({ code: a.code })}
+              />
+
+              {/* Département multi */}
+              <TagInput
+                label={`Départements ${form.depts.length === 0 ? '— Toute la France' : ''}`}
+                source="INSEE COG 2026" sourceUrl="https://www.data.gouv.fr/datasets/code-officiel-geographique-cog"
+                placeholder="Rechercher un département (ex: Paris, Lyon, 69…)"
+                tags={form.depts.map(d => ({ code:d.code, label:`${d.nom} (${d.code})` }))}
+                suggestions={ALL_DEPTS.filter(d => d.code !== '').map(d => ({ code:d.code, label:`${d.nom} (${d.code})`, nom:d.nom }))}
+                onAdd={d => addDept({ code:d.code, nom:d.nom || d.label.split(' (')[0] })}
+                onRemove={d => removeDept(d)}
+              />
+              {form.depts.length === 0 && (
+                <div style={{ marginTop:-12, fontSize:12, color:'var(--brand-mid)', display:'flex', alignItems:'center', gap:6 }}>
+                  <span>✓</span> Toute la France — aucun filtre département
+                </div>
+              )}
+
+              {/* Taille multi-toggle */}
+              <div>
+                <label className="label" style={{ marginBottom:10 }}>Taille d'entreprise <span style={{ fontWeight:400, color:'var(--t4)' }}>(plusieurs possibles · vide = toutes)</span></label>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                  {EFFECTIFS.map(e => {
+                    const active = !!form.effectifs.find(x => x.code === e.code)
+                    return (
+                      <button key={e.code} onClick={() => toggleEffectif(e)} style={{
+                        padding:'6px 14px', borderRadius:20, fontSize:13, fontWeight:500,
+                        cursor:'pointer', transition:'all .12s',
+                        border:`1px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                        background: active ? 'var(--brand)' : 'var(--white)',
+                        color: active ? 'white' : 'var(--t2)',
+                      }}>
+                        {e.label} sal.
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                <div className="field">
-                  <label className="label">Taille d'entreprise</label>
-                  <select className="select" value={form.effectif} onChange={e => setForm(f=>({...f,effectif:e.target.value}))}>
-                    {EFFECTIFS.map(e => <option key={e.code} value={e.code}>{e.label}</option>)}
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="label">Sociétés SIRENE : <strong style={{ color:'var(--brand)' }}>{form.nCompanies}</strong></label>
-                  <input type="range" min={5} max={25} step={5} value={form.nCompanies}
-                    onChange={e => setForm(f=>({...f,nCompanies:+e.target.value}))}
-                    style={{ width:'100%', marginTop:10, accentColor:'var(--brand)' }} />
-                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--t4)', marginTop:2 }}>
-                    <span>5</span><span>25</span>
-                  </div>
+              {/* N sociétés */}
+              <div>
+                <label className="label" style={{ marginBottom:8 }}>
+                  Sociétés SIRENE à rechercher : <strong style={{ color:'var(--brand)' }}>{form.nCompanies}</strong>
+                  <span style={{ fontWeight:400, color:'var(--t4)', fontSize:12, marginLeft:8 }}>par secteur APE sélectionné</span>
+                </label>
+                <input type="range" min={5} max={25} step={5} value={form.nCompanies}
+                  onChange={e => setForm(f=>({...f,nCompanies:+e.target.value}))}
+                  style={{ width:'100%', accentColor:'var(--brand)' }} />
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--t4)', marginTop:3 }}>
+                  <span>5</span>
+                  <span style={{ color:'var(--t3)', fontSize:12 }}>
+                    Total max : {form.nCompanies * Math.max(form.apes.length, 1)} sociétés
+                  </span>
+                  <span>25</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Filtres International */}
+          {/* ── INTERNATIONAL ── */}
           {!isFrance && (
             <div className="card" style={{ padding:'20px 24px', marginBottom:12 }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
@@ -361,9 +444,7 @@ export default function NouvelleBase() {
                 <div className="field">
                   <label className="label">Secteur</label>
                   <select className="select" value={form.intlSector} onChange={e => setForm(f=>({...f,intlSector:e.target.value}))}>
-                    {['SaaS / Tech','Marketing / Pub','Finance / Fintech','Conseil / Consulting','RH / Recrutement','E-commerce','Industrie','Immobilier','Santé / Medtech','Éducation'].map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
+                    {['SaaS / Tech','Marketing / Pub','Finance / Fintech','Conseil / Consulting','RH / Recrutement','E-commerce','Industrie','Immobilier','Santé / Medtech','Éducation'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -376,30 +457,42 @@ export default function NouvelleBase() {
             </div>
           )}
 
-          {/* Poste cible */}
-          <div className="card" style={{ padding:'20px 24px', marginBottom:16 }}>
-            <label className="label" style={{ marginBottom:10 }}>Poste cible</label>
+          {/* Poste cible — presets cumulatifs */}
+          <div className="card" style={{ padding:'20px 24px', marginBottom:12 }}>
+            <label className="label" style={{ marginBottom:10 }}>
+              Postes cibles
+              <span style={{ fontWeight:400, color:'var(--t4)', fontSize:12, marginLeft:8 }}>plusieurs presets cumulables</span>
+            </label>
             <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
-              {JOB_PRESETS.map(p => (
-                <Chip key={p.label} active={form.jobTitles===p.v}
-                  onClick={() => setForm(f=>({...f,jobTitles:p.v}))}>
-                  {p.label}
-                </Chip>
-              ))}
+              {JOB_PRESETS.map(p => {
+                const active = isPresetActive(p)
+                return (
+                  <button key={p.label} onClick={() => togglePreset(p)} style={{
+                    padding:'6px 14px', borderRadius:20, fontSize:13, fontWeight:500,
+                    cursor:'pointer', transition:'all .12s',
+                    border:`1px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                    background: active ? 'var(--brand)' : 'var(--white)',
+                    color: active ? 'white' : 'var(--t2)',
+                  }}>
+                    {active ? '✓ ' : ''}{p.label}
+                  </button>
+                )
+              })}
             </div>
             <input className="input" value={form.jobTitles}
               onChange={e => setForm(f=>({...f,jobTitles:e.target.value}))}
-              placeholder="Ex: Directeur Marketing, CMO, VP Marketing — ou choisissez un raccourci" />
+              placeholder="Modifiez ou ajoutez librement des postes, séparés par des virgules" />
+            {form.jobTitles && (
+              <div style={{ marginTop:6, fontSize:11, color:'var(--t3)', fontFamily:'var(--fm)' }}>
+                {form.jobTitles.split(',').filter(Boolean).length} titre{form.jobTitles.split(',').filter(Boolean).length > 1 ? 's' : ''} · {form.jobTitles.split(',').filter(Boolean).map(s => s.trim()).join(' · ')}
+              </div>
+            )}
           </div>
 
-          {/* Récap + CTA */}
-          {canSubmit && (
-            <div style={{ padding:'12px 16px', background:'var(--bg2)', borderRadius:8, border:'1px solid var(--border3)', fontSize:13, color:'var(--brand-mid)', marginBottom:14 }}>
-              <strong>{form.jobTitles.split(',')[0].trim()}</strong>
-              {isFrance
-                ? <> dans les <strong>{apeInfo?.label}</strong> · <strong>{deptInfo?.nom}</strong> · {effInfo?.label || 'toutes tailles'} · {form.nCompanies} sociétés</>
-                : <> · <strong>{form.intlSector}</strong> · <strong>{countryInfo?.label}</strong>{form.intlCity ? ` · ${form.intlCity}` : ''}</>
-              }
+          {/* Récap */}
+          {summary && (
+            <div style={{ padding:'10px 16px', background:'var(--bg2-data)', borderRadius:'var(--r-md)', border:'1px solid var(--border3-data)', fontSize:13, color:'var(--brand-mid)', marginBottom:14 }}>
+              {summary}
             </div>
           )}
 
@@ -407,15 +500,15 @@ export default function NouvelleBase() {
             <Link href="/dashboard">
               <button className="btn btn-secondary">Annuler</button>
             </Link>
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit || saving}
-              style={{ gap:8 }}>
+            <button className="btn btn-primary" onClick={handleSubmit}
+              disabled={!canSubmit || saving}>
               {saving
                 ? <><span className="spinner" style={{ width:14, height:14, borderColor:'rgba(255,255,255,.3)', borderTopColor:'white' }} /> Création…</>
                 : '◎ Créer et générer →'}
             </button>
           </div>
           <p style={{ textAlign:'right', fontSize:11, color:'var(--t4)', marginTop:6 }}>
-            La génération démarre automatiquement après la création
+            Génération automatique après la création
           </p>
         </div>
       </Layout>

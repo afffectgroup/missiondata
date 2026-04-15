@@ -62,11 +62,10 @@ export default function BasePage() {
     if (!id || !user) return
     // Auto-start if redirected from creation with ?autostart=1
     const autostart = router.query.autostart === '1'
-    fetchAll().then(() => {
-      if (autostart) {
-        // Remove param from URL then generate
+    fetchAll().then((loadedBase) => {
+      if (autostart && loadedBase) {
         router.replace(`/bases/${id}`, undefined, { shallow: true })
-        setTimeout(() => generate(), 300)
+        setTimeout(() => generate(loadedBase), 400)
       }
     })
 
@@ -85,13 +84,14 @@ export default function BasePage() {
 
   async function fetchAll() {
     setLoading(true)
-    const [b, c] = await Promise.all([
+    const [b, p] = await Promise.all([
       supabase.from('campaigns').select('*').eq('id', id).single(),
       supabase.from('prospects').select('*').eq('campaign_id', id).order('created_at'),
     ])
     setBase(b.data)
-    setContacts(c.data || [])
+    setContacts(p.data || [])
     setLoading(false)
+    return b.data  // Return for autostart
   }
 
   async function fetchContacts() {
@@ -99,30 +99,55 @@ export default function BasePage() {
     setContacts(data || [])
   }
 
-  async function generate() {
+  // Accept optional baseData to avoid stale closure (autostart case)
+  async function generate(baseData) {
+    const b = baseData || base
+    if (!b) { setError('Données de la base non chargées — réessayez.'); return }
     setRunning(true); setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       let companies = []
 
-      if (base.mode !== 'international') {
-        // ── Mode France : fetch SIRENE depuis le client (API publique, pas de CORS) ──
-        const params = new URLSearchParams({ per_page: base.n_companies || 10, page: 1 })
-        if (base.ape_code)      params.set('activite_principale', base.ape_code)
-        if (base.departement)   params.set('departement', base.departement)
-        if (base.effectif_code) params.set('tranche_effectif_salarie', base.effectif_code)
+      if (b.mode !== 'international') {
+        // ── Mode France : SIRENE avec support multi-APE et multi-dept ──
+        const apeCodes  = (b.ape_code || '').split(',').map(s => s.trim()).filter(Boolean)
+        const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
+        const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
+        const perApe    = Math.max(Math.ceil((b.n_companies || 10) / Math.max(apeCodes.length, 1)), 3)
 
-        const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`)
-        if (!r.ok) throw new Error(`SIRENE API ${r.status}`)
-        const d = await r.json()
-        companies = d.results || []
+        // Une requête SIRENE par APE (× par dept si plusieurs)
+        const calls = []
+        for (const ape of (apeCodes.length ? apeCodes : [''])) {
+          const depts = deptCodes.length ? deptCodes : ['']
+          for (const dept of depts) {
+            const params = new URLSearchParams({ per_page: perApe, page: 1 })
+            if (ape)  params.set('activite_principale', ape)
+            if (dept) params.set('departement', dept)
+            if (effCodes.length === 1) params.set('tranche_effectif_salarie', effCodes[0])
+            calls.push(fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`))
+          }
+        }
+
+        const responses = await Promise.all(calls)
+        for (const r of responses) {
+          if (r.ok) {
+            const d = await r.json()
+            companies.push(...(d.results || []))
+          }
+        }
+
+        // Dédoublonnage par SIREN
+        const seen = new Set()
+        companies = companies.filter(c => {
+          if (!c.siren || seen.has(c.siren)) return false
+          seen.add(c.siren); return true
+        })
 
         if (!companies.length) {
-          setError('Aucune entreprise SIRENE trouvée. Essayez de modifier le code APE, le département ou la taille.')
+          setError('Aucune entreprise SIRENE trouvée. Élargissez les critères.')
           setRunning(false); return
         }
       }
-      // Mode International : companies = [] → le serveur fait Icypeas directement
 
       const resp = await fetch(`/api/bases/${id}/generate-contacts`, {
         method: 'POST',
