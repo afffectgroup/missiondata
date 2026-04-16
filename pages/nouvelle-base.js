@@ -444,7 +444,39 @@ export default function NouvelleBase() {
                 <div className="field">
                   <label className="label">Secteur</label>
                   <select className="select" value={form.intlSector} onChange={e => setForm(f=>({...f,intlSector:e.target.value}))}>
-                    {['SaaS / Tech','Marketing / Pub','Finance / Fintech','Conseil / Consulting','RH / Recrutement','E-commerce','Industrie','Immobilier','Santé / Medtech','Éducation'].map(s => <option key={s} value={s}>{s}</option>)}
+                    <optgroup label="💻 Tech & Digital">
+                      {['SaaS / Logiciels','Cybersécurité','Intelligence Artificielle','Data & Analytics','Cloud & Infrastructure','Développement / Agence web','E-commerce / Retail tech','Gaming / Jeux vidéo'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="📣 Marketing & Communication">
+                      {['Marketing & Publicité','Relations publiques / RP','Médias & Presse','Content / Studio créatif','Social Media & Influence','Événementiel & Communication'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="💼 Conseil & Services B2B">
+                      {['Conseil en stratégie','Conseil en management','Conseil IT / Digital','Cabinet d\'avocats / Juridique','Comptabilité & Audit','Facility Management','Traduction & Localisation'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="👥 RH & Formation">
+                      {['RH & Recrutement','Chasse de têtes','Travail temporaire','Formation professionnelle','Coaching & Développement'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🏦 Finance & Assurance">
+                      {['Fintech','Banque & Finance','Assurance','Private Equity / VC','Gestion de patrimoine','Comptabilité & Audit'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🏥 Santé & Sciences">
+                      {['Santé & Medtech','Pharmacie & Biotech','Dispositifs médicaux','Santé digitale / HealthTech','Recherche & Développement'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🏭 Industrie & Énergie">
+                      {['Industrie & Manufacture','Énergie & Utilities','GreenTech & Environnement','Automobile & Mobilité','Aérospatial & Défense','Chimie & Matériaux'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🏠 Immobilier & Construction">
+                      {['Immobilier','Promotion immobilière','Construction & BTP','Architecture & Design','PropTech'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🛒 Commerce & Logistique">
+                      {['Retail & Grande distribution','Logistique & Supply Chain','Import / Export','Marketplace & E-commerce'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🎭 Lifestyle & Luxe">
+                      {['Hôtellerie & Tourisme','Restauration & Food','Luxe & Mode','Cosmétique & Beauté','Sport & Fitness & Loisirs','Bien-être & Spa'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="🎓 Éducation & Culture">
+                      {['Éducation & Edtech','Enseignement supérieur','Culture & Arts','ONG & Associations','Collectivités & Secteur public'].map(s=><option key={s} value={s}>{s}</option>)}
+                    </optgroup>
                   </select>
                 </div>
                 <div className="field">
