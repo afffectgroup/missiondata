@@ -23,15 +23,19 @@ async function icypeas(path, body) {
 
 async function sireneSearch(apeCode, dept, effectif, perPage) {
   const p = new URLSearchParams({ per_page: perPage, page: 1 })
-  if (apeCode)   p.set('activite_principale', apeCode.replace('.', ''))
-  if (dept)      p.set('departement', dept)
-  if (effectif)  p.set('tranche_effectif_salarie', effectif)
-  const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, {
-    headers: { 'Accept': 'application/json', 'User-Agent': 'MissionData/1.0' }
-  })
-  if (!r.ok) throw new Error(`SIRENE ${r.status}`)
+  // Format APE: remove dot (20.42Z → 2042Z)
+  if (apeCode)  p.set('activite_principale', apeCode.replace(/\./g, ''))
+  if (dept)     p.set('departement', dept)
+  if (effectif) p.set('tranche_effectif_salarie', effectif)
+
+  const url = `https://recherche-entreprises.api.gouv.fr/search?${p}`
+  const r = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!r.ok) {
+    const t = await r.text()
+    throw new Error(`SIRENE ${r.status}: ${t.slice(0, 100)}`)
+  }
   const d = await r.json()
-  return d.results || []
+  return { results: d.results || [], total: d.total_results || 0 }
 }
 
 export default async function handler(req, res) {
@@ -76,22 +80,24 @@ export default async function handler(req, res) {
 
       const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
       const deptsToSearch = deptCodes.length ? deptCodes : ['']
-      const perApe        = Math.max(Math.ceil(nCo / apesToSearch.length), 3)
+      const perApe        = Math.max(Math.ceil(nCo / apesToSearch.length), 5)
 
       const calls = []
       for (const ape of apesToSearch) {
         for (const dept of deptsToSearch) {
           calls.push(
             sireneSearch(ape, dept, effCodes[0] || '', perApe)
-              .catch(e => { log(`⚠ SIRENE partiel: ${e.message}`, 'w'); return [] })
+              .catch(e => { log(`⚠ SIRENE erreur: ${e.message}`, 'w'); return { results: [], total: 0 } })
           )
         }
       }
 
       const batches = await Promise.all(calls)
       const seen    = new Set()
+      let totalFound = 0
       for (const batch of batches) {
-        for (const co of batch) {
+        totalFound += batch.total || 0
+        for (const co of (batch.results || [])) {
           if (co.siren && !seen.has(co.siren)) {
             seen.add(co.siren)
             companies.push(co)
@@ -99,12 +105,35 @@ export default async function handler(req, res) {
         }
       }
 
-      if (!companies.length) {
-        await admin.from('campaigns').update({ status: 'draft', generation_pct: 0 }).eq('id', id)
-        return fail('Aucune société trouvée dans SIRENE. Vérifiez le code APE ou élargissez les filtres.')
+      log(`SIRENE: ${companies.length} sociétés récupérées (${totalFound} total dispo)`, 'i')
+
+      // Fallback : si 0 résultats avec effectif, réessayer sans
+      if (!companies.length && effCodes.length) {
+        log('⚠ 0 résultats avec filtre taille — on réessaie sans filtre effectif…', 'w')
+        const fallbackCalls = apesToSearch.flatMap(ape =>
+          deptsToSearch.map(dept =>
+            sireneSearch(ape, dept, '', perApe)
+              .catch(() => ({ results: [], total: 0 }))
+          )
+        )
+        const fallbackBatches = await Promise.all(fallbackCalls)
+        for (const batch of fallbackBatches) {
+          for (const co of (batch.results || [])) {
+            if (co.siren && !seen.has(co.siren)) {
+              seen.add(co.siren)
+              companies.push(co)
+            }
+          }
+        }
+        log(`Fallback SIRENE: ${companies.length} sociétés`, companies.length > 0 ? 's' : 'w')
       }
 
-      log(`✓ ${companies.length} sociétés SIRENE`, 's')
+      if (!companies.length) {
+        await admin.from('campaigns').update({ status: 'draft', generation_pct: 0 }).eq('id', id)
+        return fail(`Aucune société trouvée dans SIRENE pour le code APE "${apeCodes.join(', ')}". Essayez un autre secteur ou sans filtre département.`)
+      }
+
+      log(`✓ ${companies.length} sociétés trouvées`, 's')
       send('companies', { count: companies.length, names: companies.slice(0, 5).map(c => c.nom_raison_sociale) })
     }
 
@@ -137,6 +166,7 @@ export default async function handler(req, res) {
       .map(p => ({
         firstname:       p.firstname,
         lastname:        p.lastname,
+        // Site web en priorité — beaucoup plus fiable que le nom d'entreprise
         domainOrCompany: p.lastCompanyWebsite || p.lastCompanyName,
       }))
 
@@ -195,6 +225,11 @@ export default async function handler(req, res) {
         location:     p.address || co.siege?.libelle_commune || null,
         sector:       p.lastCompanyIndustry || base.ape_label || base.intl_sector || '',
         source:       'icypeas',
+        // Sauvegarder le site web pour l'enrichissement email ultérieur
+        raw_data: JSON.stringify({
+          website: p.lastCompanyWebsite || '',
+          company: p.lastCompanyName    || '',
+        }),
       }
     })
 

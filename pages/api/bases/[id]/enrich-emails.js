@@ -1,6 +1,22 @@
+/**
+ * Email enrichment via Icypeas bulk-single-searchs
+ * Un seul batch pour tous les contacts sans email
+ */
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin'
-import { searchEmail } from '../../../../lib/icypeas'
+
+const ICYPEAS_BASE = 'https://app.icypeas.com/api'
+
+async function icypeas(path, body) {
+  const r = await fetch(`${ICYPEAS_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: process.env.ICYPEAS_API_KEY },
+    body: JSON.stringify(body),
+  })
+  const text = await r.text()
+  try { return JSON.parse(text) }
+  catch { throw new Error(`Icypeas ${path}: ${r.status} ${text.slice(0, 150)}`) }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -10,60 +26,88 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: 'Non authentifié' })
 
   const { id } = req.query
-  const admin = getSupabaseAdmin()
+  const admin   = getSupabaseAdmin()
 
   const { data: base } = await admin.from('campaigns').select('id,user_id').eq('id', id).single()
   if (!base || base.user_id !== session.user.id) return res.status(403).json({ error: 'Accès refusé' })
 
-  // Get prospects without email
+  // Prospects sans email
   const { data: prospects } = await admin
     .from('prospects')
     .select('id, fullname, company, raw_data')
     .eq('campaign_id', id)
     .is('email', null)
+    .limit(50)
 
-  if (!prospects?.length) return res.status(200).json({ enriched: 0 })
+  if (!prospects?.length) return res.status(200).json({ enriched: 0, total: 0 })
 
-  let enriched = 0
-  const results = []
-
-  // Enrich one by one with a short timeout each — avoids one slow call killing all
-  for (const p of prospects) {
+  // Build batch input — site web en priorité sur nom d'entreprise
+  const input = prospects.map(p => {
+    const parts     = (p.fullname || '').split(' ')
+    const firstname = parts[0] || ''
+    const lastname  = parts.slice(1).join(' ') || ''
+    let website = ''
+    let company = p.company || ''
     try {
-      const parts = (p.fullname || '').split(' ')
-      const firstname = parts[0] || ''
-      const lastname  = parts.slice(1).join(' ') || ''
-      let domain = ''
-      try { domain = JSON.parse(p.raw_data || '{}').website || p.company } catch { domain = p.company }
+      const rd = JSON.parse(p.raw_data || '{}')
+      if (rd.website) website = rd.website
+      if (rd.company) company = rd.company
+    } catch {}
+    // Icypeas : site web > nom d'entreprise
+    const domainOrCompany = website || company
+    return { id: p.id, firstname, lastname, domainOrCompany }
+  }).filter(x => x.firstname && x.lastname && x.domainOrCompany)
 
-      if (!firstname || !lastname || !domain) continue
+  if (!input.length) return res.status(200).json({ enriched: 0, total: prospects.length })
 
-      const emailData = await Promise.race([
-        searchEmail(firstname, lastname, domain),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
-      ])
+  try {
+    // Submit bulk batch
+    const bulk = await icypeas('/bulk-single-searchs', {
+      name: `md-enrich-${id.slice(0, 8)}-${Date.now()}`,
+      task: 'email-search',
+      data: input.map(x => [x.firstname, x.lastname, x.domainOrCompany]),
+    })
 
-      if (emailData?.email) {
-        await admin.from('prospects').update({
-          email: emailData.email,
-          email_cert: emailData.certainty || null
-        }).eq('id', p.id)
-        enriched++
-        results.push({ id: p.id, email: emailData.email, cert: emailData.certainty })
+    const batchId = bulk?.item?._id || bulk?._id
+    if (!batchId) return res.status(200).json({ enriched: 0, total: input.length, error: 'Pas de batchId' })
+
+    // Poll jusqu'à 60s
+    const results = []
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 3000))
+      const poll = await icypeas('/bulk-single-searchs/read', { id: batchId })
+
+      // Collect results
+      const items = Array.isArray(poll?.items) ? poll.items : []
+      for (const item of items) {
+        if (item.results?.emails?.[0] && item.status !== 'NOT_FOUND') {
+          results.push({
+            order:     item.order ?? 0,
+            email:     item.results.emails[0].email,
+            certainty: item.results.emails[0].certainty,
+          })
+        }
       }
-    } catch (e) {
-      // Skip failed enrichments silently — continue with next
+
+      const status = poll?.item?.status || poll?.status || ''
+      if (['DONE', 'PARTIALLY_DONE', 'FAILED'].some(s => status.includes(s))) break
     }
+
+    // Update prospects with emails
+    let enriched = 0
+    for (const r of results) {
+      const prospect = input[r.order]
+      if (!prospect) continue
+      const { error } = await admin.from('prospects').update({
+        email:      r.email,
+        email_cert: r.certainty,
+      }).eq('id', prospect.id)
+      if (!error) enriched++
+    }
+
+    return res.status(200).json({ enriched, total: input.length })
+
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
   }
-
-  // Update email count on campaign
-  const { data: updated } = await admin
-    .from('prospects')
-    .select('id', { count: 'exact' })
-    .eq('campaign_id', id)
-    .not('email', 'is', null)
-  
-  await admin.from('campaigns').update({ emails_count: enriched }).eq('id', id).catch(() => {})
-
-  res.status(200).json({ enriched, total: prospects.length, results })
 }
