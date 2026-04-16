@@ -101,120 +101,66 @@ export default function BasePage() {
   }
 
   // Accept optional baseData to avoid stale closure (autostart case)
+  // ── Pipeline via SSE (Server-Sent Events) ─ tout côté serveur ──
   async function generate(baseData) {
     const b = baseData || base
     if (!b) { setError('Données non chargées — rechargez la page.'); return }
     setRunning(true); setError('')
-    setLogs([{ msg: 'Démarrage du pipeline…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
-
-    const log = (msg, type = 'i') =>
-      setLogs(prev => [...prev, { msg, type, ts: new Date().toLocaleTimeString('fr-FR') }])
+    setLogs([{ msg: 'Connexion au pipeline…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      let companies = []
-      const isFR = (b.mode || 'france') !== 'international'
 
-      // ── Étape 1 : SIRENE (France uniquement) ──
-      if (isFR) {
-        log('↗ SIRENE — recherche sociétés…', 'i')
-        const apeCodes  = (b.ape_code || '').split(',').map(s => s.trim()).filter(Boolean)
-        const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
-        const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
-        const perApe    = Math.max(Math.ceil((b.n_companies || 10) / Math.max(apeCodes.length, 1)), 5)
+      const es = await fetch(`/api/bases/${id}/pipeline`, {
+        method:  'POST',
+        headers: {
+          Authorization:  `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      })
 
-        const sireneOps = []
-        for (const ape of (apeCodes.length ? apeCodes : [''])) {
-          for (const dept of (deptCodes.length ? deptCodes : [''])) {
-            const p = new URLSearchParams({ per_page: perApe, page: 1 })
-            if (ape)  p.set('activite_principale', ape)
-            if (dept) p.set('departement', dept)
-            if (effCodes.length) p.set('tranche_effectif_salarie', effCodes[0])
-            sireneOps.push(fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`))
+      if (!es.ok) {
+        const e = await es.json().catch(() => ({}))
+        throw new Error(e.error || `Erreur ${es.status}`)
+      }
+
+      const reader  = es.body.getReader()
+      const decoder = new TextDecoder()
+      let   buffer  = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const SEP = '\n\n'
+        const parts = buffer.split(SEP)
+        buffer = parts.pop() // keep incomplete chunk
+
+        for (const part of parts) {
+          const line = part.replace(/^data: /, '').trim()
+          if (!line) continue
+          try {
+            const ev = JSON.parse(line)
+            if (ev.type === 'log') {
+              setLogs(prev => [...prev, { msg: ev.msg, type: ev.t, ts: ev.ts }])
+            } else if (ev.type === 'companies') {
+              setLogs(prev => [...prev, {
+                msg: `  Sociétés : ${ev.names?.join(', ')}${ev.count > 5 ? '…' : ''}`,
+                type: 'i', ts: new Date().toLocaleTimeString('fr-FR')
+              }])
+            } else if (ev.type === 'done') {
+              await fetchContacts()
+              setBase(prev => ({ ...prev, status: 'done', generation_pct: 100, prospects_count: ev.count }))
+              setRunning(false)
+            } else if (ev.type === 'error') {
+              throw new Error(ev.msg)
+            }
+          } catch (parseErr) {
+            if (parseErr.message !== line) throw parseErr
           }
         }
-        const sResponses = await Promise.all(sireneOps)
-        for (const r of sResponses) {
-          if (r.ok) { const d = await r.json(); companies.push(...(d.results || [])) }
-        }
-        const seen = new Set()
-        companies = companies.filter(c => {
-          if (!c.siren || seen.has(c.siren)) return false
-          seen.add(c.siren); return true
-        })
-        if (!companies.length) {
-          setError('Aucune société SIRENE trouvée — élargissez les critères.')
-          setRunning(false); return
-        }
-        log(`✓ ${companies.length} sociétés SIRENE`, 's')
       }
-
-      // ── Étape 2 : Anthropic API + Icypeas MCP (dans le navigateur) ──
-      log('↗ Icypeas — recherche contacts + emails…', 't')
-      const titles    = (b.job_titles || b.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
-      const compNames = companies.map(c => c.nom_raison_sociale).filter(Boolean)
-
-      const system = `Tu es un assistant de prospection B2B. Utilise les outils Icypeas.
-Retourne UNIQUEMENT un JSON valide sans texte autour.
-Format exact : {"leads":[{"fullname":"","job_title":"","company":"","email":"","certainty":"","linkedin_url":"","location":"","domain":""}]}`
-
-      const user = isFR
-        ? `Trouve des contacts décisionnaires dans ces entreprises :
-${compNames.slice(0,20).map((n,i) => `${i+1}. ${n}`).join('\n')}
-Postes cibles : ${titles.join(', ')}
-1. find-people avec currentCompanyName.include:[${compNames.slice(0,15).map(n => JSON.stringify(n)).join(',')}], currentJobTitle.include:[${titles.map(t => JSON.stringify(t)).join(',')}], location.include:["FR"]
-2. bulk-email-search pour enrichir les emails de tous les contacts trouvés
-3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre`
-        : `Trouve ${b.n_companies||20} contacts B2B :
-Postes : ${titles.join(', ')} · Pays : ${b.country_label||b.country_code||'FR'}${b.intl_city ? ' · '+b.intl_city : ''}${b.intl_sector ? ' · Secteur: '+b.intl_sector : ''}
-1. find-people avec les bons filtres
-2. bulk-email-search
-3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre`
-
-      const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 8192,
-          system,
-          mcp_servers: [{ type: 'url', url: 'https://mcp.icypeas.com/mcp', name: 'icypeas' }],
-          messages: [{ role: 'user', content: user }],
-        }),
-      })
-
-      if (!apiRes.ok) {
-        const e = await apiRes.json().catch(() => ({}))
-        throw new Error(e.error?.message || `Anthropic API ${apiRes.status}`)
-      }
-
-      const apiData = await apiRes.json()
-      for (const blk of (apiData.content || [])) {
-        if (blk.type === 'mcp_tool_use') log(`⚙ ${blk.name}`, 't')
-      }
-
-      const rawText = (apiData.content || []).filter(blk => blk.type === 'text').map(blk => blk.text).join('')
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('Réponse Icypeas invalide — réessayez')
-
-      const parsed = JSON.parse(jsonMatch[0])
-      const leads  = parsed.leads || []
-      log(`✓ ${leads.length} contacts (${leads.filter(l => l.email).length} emails)`, 's')
-
-      // ── Étape 3 : Sauvegarde ──
-      log('Sauvegarde en base…', 'i')
-      const saveRes = await fetch(`/api/bases/${id}/save-contacts`, {
-        method:  'POST',
-        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ contacts: leads }),
-      })
-      if (!saveRes.ok) throw new Error('Erreur sauvegarde')
-
-      const saved = await saveRes.json()
-      log(`✓ ${saved.count} contacts sauvegardés`, 's')
-      await fetchContacts()
-      setBase(prev => ({ ...prev, status: 'done', generation_pct: 100, prospects_count: saved.count }))
-      setRunning(false)
 
     } catch (e) {
       setLogs(prev => [...prev, { msg: `✗ ${e.message}`, type: 'e', ts: new Date().toLocaleTimeString('fr-FR') }])
@@ -222,7 +168,6 @@ Postes : ${titles.join(', ')} · Pays : ${b.country_label||b.country_code||'FR'}
       setRunning(false)
     }
   }
-
 
   async function enrichEmails() {
     setEnriching(true); setEnrichResult(null); setError("")
