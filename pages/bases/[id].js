@@ -51,6 +51,7 @@ export default function BasePage() {
   const [contacts, setContacts] = useState([])
   const [loading, setLoading]   = useState(true)
   const [running, setRunning]   = useState(false)
+  const [logs, setLogs]         = useState([])
   const [enriching, setEnriching] = useState(false)
   const [enrichResult, setEnrichResult] = useState(null)
   const [error, setError]       = useState('')
@@ -102,68 +103,126 @@ export default function BasePage() {
   // Accept optional baseData to avoid stale closure (autostart case)
   async function generate(baseData) {
     const b = baseData || base
-    if (!b) { setError('Données de la base non chargées — réessayez.'); return }
+    if (!b) { setError('Données non chargées — rechargez la page.'); return }
     setRunning(true); setError('')
+    setLogs([{ msg: 'Démarrage du pipeline…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
+
+    const log = (msg, type = 'i') =>
+      setLogs(prev => [...prev, { msg, type, ts: new Date().toLocaleTimeString('fr-FR') }])
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
       let companies = []
+      const isFR = (b.mode || 'france') !== 'international'
 
-      if (b.mode !== 'international') {
-        // ── Mode France : SIRENE avec support multi-APE et multi-dept ──
+      // ── Étape 1 : SIRENE (France uniquement) ──
+      if (isFR) {
+        log('↗ SIRENE — recherche sociétés…', 'i')
         const apeCodes  = (b.ape_code || '').split(',').map(s => s.trim()).filter(Boolean)
         const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
         const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
-        const perApe    = Math.max(Math.ceil((b.n_companies || 10) / Math.max(apeCodes.length, 1)), 3)
+        const perApe    = Math.max(Math.ceil((b.n_companies || 10) / Math.max(apeCodes.length, 1)), 5)
 
-        // Une requête SIRENE par APE (× par dept si plusieurs)
-        const calls = []
+        const sireneOps = []
         for (const ape of (apeCodes.length ? apeCodes : [''])) {
-          const depts = deptCodes.length ? deptCodes : ['']
-          for (const dept of depts) {
-            const params = new URLSearchParams({ per_page: perApe, page: 1 })
-            if (ape)  params.set('activite_principale', ape)
-            if (dept) params.set('departement', dept)
-            if (effCodes.length === 1) params.set('tranche_effectif_salarie', effCodes[0])
-            calls.push(fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`))
+          for (const dept of (deptCodes.length ? deptCodes : [''])) {
+            const p = new URLSearchParams({ per_page: perApe, page: 1 })
+            if (ape)  p.set('activite_principale', ape)
+            if (dept) p.set('departement', dept)
+            if (effCodes.length) p.set('tranche_effectif_salarie', effCodes[0])
+            sireneOps.push(fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`))
           }
         }
-
-        const responses = await Promise.all(calls)
-        for (const r of responses) {
-          if (r.ok) {
-            const d = await r.json()
-            companies.push(...(d.results || []))
-          }
+        const sResponses = await Promise.all(sireneOps)
+        for (const r of sResponses) {
+          if (r.ok) { const d = await r.json(); companies.push(...(d.results || [])) }
         }
-
-        // Dédoublonnage par SIREN
         const seen = new Set()
         companies = companies.filter(c => {
           if (!c.siren || seen.has(c.siren)) return false
           seen.add(c.siren); return true
         })
-
         if (!companies.length) {
-          setError('Aucune entreprise SIRENE trouvée. Élargissez les critères.')
+          setError('Aucune société SIRENE trouvée — élargissez les critères.')
           setRunning(false); return
         }
+        log(`✓ ${companies.length} sociétés SIRENE`, 's')
       }
 
-      const resp = await fetch(`/api/bases/${id}/generate-contacts`, {
+      // ── Étape 2 : Anthropic API + Icypeas MCP (dans le navigateur) ──
+      log('↗ Icypeas — recherche contacts + emails…', 't')
+      const titles    = (b.job_titles || b.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
+      const compNames = companies.map(c => c.nom_raison_sociale).filter(Boolean)
+
+      const system = `Tu es un assistant de prospection B2B. Utilise les outils Icypeas.
+Retourne UNIQUEMENT un JSON valide sans texte autour.
+Format exact : {"leads":[{"fullname":"","job_title":"","company":"","email":"","certainty":"","linkedin_url":"","location":"","domain":""}]}`
+
+      const user = isFR
+        ? `Trouve des contacts décisionnaires dans ces entreprises :
+${compNames.slice(0,20).map((n,i) => `${i+1}. ${n}`).join('\n')}
+Postes cibles : ${titles.join(', ')}
+1. find-people avec currentCompanyName.include:[${compNames.slice(0,15).map(n => JSON.stringify(n)).join(',')}], currentJobTitle.include:[${titles.map(t => JSON.stringify(t)).join(',')}], location.include:["FR"]
+2. bulk-email-search pour enrichir les emails de tous les contacts trouvés
+3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre`
+        : `Trouve ${b.n_companies||20} contacts B2B :
+Postes : ${titles.join(', ')} · Pays : ${b.country_label||b.country_code||'FR'}${b.intl_city ? ' · '+b.intl_city : ''}${b.intl_sector ? ' · Secteur: '+b.intl_sector : ''}
+1. find-people avec les bons filtres
+2. bulk-email-search
+3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre`
+
+      const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companies }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8192,
+          system,
+          mcp_servers: [{ type: 'url', url: 'https://mcp.icypeas.com/mcp', name: 'icypeas' }],
+          messages: [{ role: 'user', content: user }],
+        }),
       })
 
-      if (!resp.ok) {
-        const e = await resp.json()
-        throw new Error(e.error || 'Erreur serveur')
+      if (!apiRes.ok) {
+        const e = await apiRes.json().catch(() => ({}))
+        throw new Error(e.error?.message || `Anthropic API ${apiRes.status}`)
       }
+
+      const apiData = await apiRes.json()
+      for (const blk of (apiData.content || [])) {
+        if (blk.type === 'mcp_tool_use') log(`⚙ ${blk.name}`, 't')
+      }
+
+      const rawText = (apiData.content || []).filter(blk => blk.type === 'text').map(blk => blk.text).join('')
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('Réponse Icypeas invalide — réessayez')
+
+      const parsed = JSON.parse(jsonMatch[0])
+      const leads  = parsed.leads || []
+      log(`✓ ${leads.length} contacts (${leads.filter(l => l.email).length} emails)`, 's')
+
+      // ── Étape 3 : Sauvegarde ──
+      log('Sauvegarde en base…', 'i')
+      const saveRes = await fetch(`/api/bases/${id}/save-contacts`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ contacts: leads }),
+      })
+      if (!saveRes.ok) throw new Error('Erreur sauvegarde')
+
+      const saved = await saveRes.json()
+      log(`✓ ${saved.count} contacts sauvegardés`, 's')
+      await fetchContacts()
+      setBase(prev => ({ ...prev, status: 'done', generation_pct: 100, prospects_count: saved.count }))
+      setRunning(false)
+
     } catch (e) {
+      setLogs(prev => [...prev, { msg: `✗ ${e.message}`, type: 'e', ts: new Date().toLocaleTimeString('fr-FR') }])
       setError(e.message)
       setRunning(false)
     }
   }
+
 
   async function enrichEmails() {
     setEnriching(true); setEnrichResult(null); setError("")
@@ -204,7 +263,7 @@ export default function BasePage() {
     XLSX.writeFile(wb, `${base.name.replace(/[^a-z0-9]/gi,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`)
   }
 
-  const isGenerating = base?.status === 'generating' || running
+  const isGenerating = running
   const filtered = contacts.filter(c => {
     const s = search.toLowerCase()
     return !s || [c.fullname,c.company,c.job_title,c.email,c.location].some(v => (v||'').toLowerCase().includes(s))
@@ -251,7 +310,7 @@ export default function BasePage() {
         {error && <div className="alert alert-error" style={{ marginBottom:20 }}>⚠ {error}</div>}
 
         {/* Progress */}
-        {isGenerating && <Progress pct={base.generation_pct||0} logs={base.generation_logs||[]} />}
+        {isGenerating && <Progress pct={running ? 50 : (base?.generation_pct||0)} logs={logs} />}
 
         {/* Actions bar */}
         {!isGenerating && (
