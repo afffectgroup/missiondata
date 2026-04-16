@@ -1,7 +1,9 @@
 /**
- * Pipeline complet côté serveur
- * POST → SIRENE (si France) → Anthropic API + Icypeas MCP → save Supabase
- * Utilise SSE (Server-Sent Events) pour streamer les logs en temps réel
+ * Pipeline complet — Anthropic API avec Datagouv MCP + Icypeas MCP
+ * 1. Claude appelle Datagouv MCP → entreprises SIRENE par code APE
+ * 2. Claude appelle Icypeas MCP → contacts dans ces entreprises + emails
+ * 3. Save Supabase
+ * SSE pour logs en temps réel
  */
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin'
@@ -17,159 +19,154 @@ export default async function handler(req, res) {
 
   const { id } = req.query
   const admin   = getSupabaseAdmin()
-
   const { data: base } = await admin.from('campaigns').select('*').eq('id', id).single()
   if (!base || base.user_id !== session.user.id) return res.status(403).json({ error: 'Accès refusé' })
 
-  // ── SSE setup ──
+  // ── SSE ──
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
-  res.setHeader('X-Accel-Buffering', 'no') // disable nginx buffering
+  res.setHeader('X-Accel-Buffering', 'no')
 
-  const send = (type, data) => {
-    res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`)
-  }
-
-  const log = (msg, t = 'i') => send('log', { msg, t, ts: new Date().toLocaleTimeString('fr-FR') })
+  const send = (type, data) => res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`)
+  const log  = (msg, t = 'i') => send('log', { msg, t, ts: new Date().toLocaleTimeString('fr-FR') })
   const done = (data) => { send('done', data); res.end() }
-  const fail = (msg) => { send('error', { msg }); res.end() }
+  const fail = (msg)  => { send('error', { msg }); res.end() }
 
   try {
     await admin.from('campaigns').update({ status: 'generating', generation_pct: 0 }).eq('id', id)
     await admin.from('prospects').delete().eq('campaign_id', id)
 
-    const isFR    = (base.mode || 'france') !== 'international'
-    const titles  = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
-    let companies = []
+    const isFR   = (base.mode || 'france') !== 'international'
+    const titles = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
+    const apeCodes  = (base.ape_code    || '').split(',').map(s => s.trim()).filter(Boolean)
+    const deptCodes = (base.departement || '').split(',').map(s => s.trim()).filter(Boolean)
+    const effCodes  = (base.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
+    const nCo       = base.n_companies || 10
 
-    // ── Étape 1 : SIRENE (serveur → pas de CORS) ──
+    log('Connexion Anthropic + MCPs…', 'i')
+
+    // ── Prompt selon mode ──
+    const system = `Tu es un assistant expert en prospection B2B.
+Tu as accès aux outils Datagouv (SIRENE) et Icypeas.
+Retourne UNIQUEMENT un JSON valide sans texte autour.
+Format exact :
+{"companies":[{"name":"","siren":"","ville":""}],"leads":[{"fullname":"","job_title":"","company":"","email":"","certainty":"","linkedin_url":"","location":""}]}`
+
+    let user
     if (isFR) {
-      log('↗ SIRENE — recherche sociétés…', 'i')
-      const apeCodes  = (base.ape_code    || '').split(',').map(s => s.trim().replace('.', '')).filter(Boolean)
-      const deptCodes = (base.departement || '').split(',').map(s => s.trim()).filter(Boolean)
-      const effCodes  = (base.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
-      const perApe    = Math.max(Math.ceil((base.n_companies || 10) / Math.max(apeCodes.length, 1)), 5)
+      const apeList    = apeCodes.map(c => c.replace('.', '')).join(', ') || '7311Z'
+      const deptFilter = deptCodes.length ? `département(s) : ${deptCodes.join(', ')}` : 'toute la France'
+      const effFilter  = effCodes.length  ? `taille : ${effCodes.join(', ')} (code tranche effectif)` : 'toutes tailles'
 
-      const calls = []
-      for (const ape of (apeCodes.length ? apeCodes : [''])) {
-        for (const dept of (deptCodes.length ? deptCodes : [''])) {
-          const p = new URLSearchParams({ per_page: perApe, page: 1 })
-          if (ape)  p.set('activite_principale', ape)
-          if (dept) p.set('departement', dept)
-          if (effCodes.length) p.set('tranche_effectif_salarie', effCodes[0])
-          calls.push(
-            fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, {
-              headers: { 'User-Agent': 'MissionData/1.0' }
-            })
-            .then(r => r.ok ? r.json() : { results: [] })
-            .then(d => d.results || [])
-            .catch(() => [])
-          )
-        }
-      }
+      user = `Effectue une recherche de prospection B2B en France :
 
-      const batches = await Promise.all(calls)
-      const seen = new Set()
-      for (const batch of batches) {
-        for (const co of batch) {
-          if (!seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
-        }
-      }
+**Étape 1 — Recherche SIRENE via l'API Recherche d'Entreprises**
+Appelle l'outil dataservices ou search avec :
+- URL : https://recherche-entreprises.api.gouv.fr/search
+- Paramètre activite_principale : ${apeList}
+- ${deptFilter}
+- ${effFilter}
+- per_page : ${nCo}
 
-      if (!companies.length) {
-        await admin.from('campaigns').update({ status: 'draft', generation_pct: 0 }).eq('id', id)
-        return fail('Aucune société SIRENE trouvée. Essayez un code APE différent, sans filtre département, ou toutes tailles.')
-      }
-      log(`✓ ${companies.length} sociétés SIRENE trouvées`, 's')
-      send('companies', { count: companies.length, names: companies.slice(0,5).map(c => c.nom_raison_sociale) })
+**Étape 2 — Recherche contacts via Icypeas**
+Utilise find-people avec :
+- currentJobTitle.include : [${titles.map(t => JSON.stringify(t)).join(',')}]
+- currentCompanyName.include : [noms des sociétés trouvées à l'étape 1, max 20]
+- location.include : ["FR"]
+- maxResults : ${nCo}
+
+**Étape 3 — Enrichissement emails**
+Appelle bulk-email-search sur tous les contacts trouvés.
+
+Retourne UNIQUEMENT {"companies":[...],"leads":[...]} — rien d'autre.`
+    } else {
+      user = `Effectue une recherche de prospection B2B internationale :
+
+**Étape 1 — Icypeas find-people**
+- currentJobTitle.include : [${titles.map(t => JSON.stringify(t)).join(',')}]
+- location.include : [${JSON.stringify(base.intl_city || base.country_code || 'FR')}]
+${base.intl_sector ? `- keyword.include : [${JSON.stringify(base.intl_sector)}]` : ''}
+- maxResults : ${nCo}
+
+**Étape 2 — bulk-email-search**
+Enrichis tous les contacts.
+
+Retourne UNIQUEMENT {"companies":[],"leads":[...]} — rien d'autre.`
     }
 
-    // ── Étape 2 : Anthropic API + Icypeas MCP ──
-    log('↗ Icypeas — recherche contacts…', 't')
-    const compNames = companies.map(c => c.nom_raison_sociale).filter(Boolean)
-
-    const system = `Tu es un assistant de prospection B2B. Utilise les outils Icypeas disponibles.
-Retourne UNIQUEMENT un JSON valide sans aucun texte autour, ni markdown, ni explication.
-Format exact : {"leads":[{"fullname":"","job_title":"","company":"","email":"","certainty":"","linkedin_url":"","location":"","domain":""}]}`
-
-    const user = isFR
-      ? `Trouve des contacts décisionnaires dans ces entreprises françaises :
-${compNames.slice(0,20).map((n,i) => `${i+1}. ${n}`).join('\n')}
-Postes cibles : ${titles.join(', ')}
-1. Appelle find-people avec currentCompanyName.include:[${compNames.slice(0,15).map(n => JSON.stringify(n)).join(',')}], currentJobTitle.include:[${titles.map(t => JSON.stringify(t)).join(',')}], location.include:["FR"], maxResults:${base.n_companies || 20}
-2. Appelle bulk-email-search pour enrichir les emails de tous les contacts trouvés
-3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre, pas de markdown`
-      : `Trouve ${base.n_companies || 20} contacts B2B :
-Postes : ${titles.join(', ')}
-Pays : ${base.country_label || base.country_code || 'FR'}${base.intl_city ? ` — ${base.intl_city}` : ''}${base.intl_sector ? ` — Secteur: ${base.intl_sector}` : ''}
-1. Appelle find-people avec les filtres appropriés
-2. Appelle bulk-email-search
-3. Retourne UNIQUEMENT {"leads":[...]} — rien d'autre`
+    const mcpServers = [
+      { type: 'url', url: 'https://mcp.icypeas.com/mcp',  name: 'icypeas',  authorization_token: process.env.ICYPEAS_API_KEY },
+      { type: 'url', url: 'https://mcp.data.gouv.fr/mcp', name: 'datagouv' },
+    ]
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method:  'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key':    process.env.ANTHROPIC_API_KEY,
+        'Content-Type':      'application/json',
+        'x-api-key':         process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'mcp-client-2025-04-04',
+        'anthropic-beta':    'mcp-client-2025-04-04',
       },
       body: JSON.stringify({
         model:       'claude-sonnet-4-20250514',
         max_tokens:  8192,
         system,
-        mcp_servers: [{
-          type: 'url',
-          url:  'https://mcp.icypeas.com/mcp',
-          name: 'icypeas',
-          authorization_token: process.env.ICYPEAS_API_KEY,
-        }],
+        mcp_servers: mcpServers,
         messages:    [{ role: 'user', content: user }],
       }),
     })
 
     if (!anthropicRes.ok) {
       const e = await anthropicRes.json().catch(() => ({}))
-      return fail(`Anthropic API: ${e.error?.message || anthropicRes.status}`)
+      return fail(`Erreur API : ${e.error?.message || anthropicRes.status}`)
     }
 
     const apiData = await anthropicRes.json()
 
     // Log tool calls
     for (const blk of (apiData.content || [])) {
-      if (blk.type === 'tool_use' || blk.type === 'mcp_tool_use') log(`⚙ ${blk.name}`, 't')
+      if (blk.type === 'tool_use' || blk.type === 'mcp_tool_use') {
+        log(`⚙ ${blk.name}`, 't')
+      }
     }
 
     // Extract JSON
-    const rawText  = (apiData.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
-    const jsonMatch = rawText.match(/[{][\s\S]*[}]/)
-    if (!jsonMatch) return fail('Réponse Icypeas invalide — réessayez')
+    const rawText = (apiData.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
+    const m = rawText.match(/[{][\s\S]*[}]/)
+    if (!m) return fail('Réponse invalide — réessayez')
 
-    let leads = []
-    try { leads = JSON.parse(jsonMatch[0]).leads || [] }
+    let result
+    try { result = JSON.parse(m[0]) }
     catch { return fail('JSON invalide — réessayez') }
 
-    log(`✓ ${leads.length} contacts (${leads.filter(l => l.email).length} avec email)`, 's')
+    const companies = result.companies || []
+    const leads     = result.leads     || []
 
-    // ── Étape 3 : Sauvegarde ──
+    log(`✓ ${companies.length} sociétés · ${leads.length} contacts (${leads.filter(l => l.email).length} emails)`, 's')
+
+    if (!leads.length) {
+      await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
+      return fail('Aucun contact trouvé — essayez avec des critères plus larges')
+    }
+
+    // Save
     log('Sauvegarde…', 'i')
-    const sirenMap = Object.fromEntries(companies.map(c => [c.nom_raison_sociale?.toLowerCase(), c]))
+    const sirenMap = Object.fromEntries(companies.map(c => [(c.name || '').toLowerCase(), c]))
     const records  = leads.map(l => {
-      const co = sirenMap[l.company?.toLowerCase()] || {}
+      const co = sirenMap[(l.company || '').toLowerCase()] || {}
       return {
         campaign_id:  id,
         user_id:      session.user.id,
-        fullname:     l.fullname || '',
+        fullname:     l.fullname  || '',
         job_title:    l.job_title || '',
-        company:      l.company || '',
-        email:        l.email || null,
+        company:      l.company   || '',
+        email:        l.email     || null,
         email_cert:   l.certainty || null,
         linkedin_url: l.linkedin_url || null,
-        location:     l.location || co.siege?.libelle_commune || null,
+        location:     l.location  || co.ville || null,
         sector:       base.ape_label || base.intl_sector || '',
         source:       'icypeas',
-        raw_data:     l.domain ? JSON.stringify({ website: l.domain }) : null,
       }
     })
 
