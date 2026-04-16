@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     // ── Étape 1 : SIRENE (serveur → pas de CORS) ──
     if (isFR) {
       log('↗ SIRENE — recherche sociétés…', 'i')
-      const apeCodes  = (base.ape_code    || '').split(',').map(s => s.trim()).filter(Boolean)
+      const apeCodes  = (base.ape_code    || '').split(',').map(s => s.trim().replace('.', '')).filter(Boolean)
       const deptCodes = (base.departement || '').split(',').map(s => s.trim()).filter(Boolean)
       const effCodes  = (base.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
       const perApe    = Math.max(Math.ceil((base.n_companies || 10) / Math.max(apeCodes.length, 1)), 5)
