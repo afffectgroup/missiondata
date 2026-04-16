@@ -132,23 +132,34 @@ const COUNTRIES = [
 ]
 
 /* ── Multi-select tag component ── */
-function TagInput({ placeholder, tags, onAdd, onRemove, suggestions, label, source, sourceUrl }) {
-  const [q, setQ] = useState('')
+function TagInput({ placeholder, tags, onAdd, onRemove, suggestions, label, source, sourceUrl, showGrouped, groupedData }) {
+  const [q, setQ]           = useState('')
+  const [browsing, setBrowse] = useState(false)
+
   const filtered = useMemo(() => {
     if (!q || q.length < 2) return []
     const s = q.toLowerCase()
     return suggestions
       .filter(x => !tags.find(t => t.code === x.code))
       .filter(x => x.label.toLowerCase().includes(s) || x.code?.toLowerCase().includes(s) || x.nom?.toLowerCase().includes(s))
-      .slice(0, 8)
+      .slice(0, 10)
   }, [q, suggestions, tags])
 
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
         <label className="label" style={{ margin:0 }}>{label}</label>
-        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize:10, color:'var(--ab)', fontFamily:'var(--fm)' }}>{source} ↗</a>}
+        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          {showGrouped && (
+            <button type="button" onClick={() => setBrowse(b => !b)}
+              style={{ fontSize:11, color: browsing ? 'var(--brand)' : 'var(--ab)', fontFamily:'var(--fm)', background:'none', border:'none', cursor:'pointer', fontWeight: browsing ? 600 : 400 }}>
+              {browsing ? '↑ Fermer' : '↓ Parcourir tous'}
+            </button>
+          )}
+          {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize:10, color:'var(--ab)', fontFamily:'var(--fm)' }}>{source} ↗</a>}
+        </div>
       </div>
+
       {/* Tags sélectionnés */}
       {tags.length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
@@ -160,29 +171,63 @@ function TagInput({ placeholder, tags, onAdd, onRemove, suggestions, label, sour
           ))}
         </div>
       )}
+
+      {/* Browse groupé (APE uniquement) */}
+      {showGrouped && browsing && (
+        <div style={{ border:'1px solid var(--border)', borderRadius:'var(--r-md)', maxHeight:320, overflowY:'auto', marginBottom:8, background:'var(--white)' }}>
+          {Object.entries(groupedData || {}).map(([cat, codes]) => (
+            <div key={cat}>
+              <div style={{ padding:'7px 12px', background:'var(--bg)', fontFamily:'var(--fm)', fontSize:10, fontWeight:500, color:'var(--t3)', letterSpacing:'.05em', textTransform:'uppercase', position:'sticky', top:0, zIndex:1, borderBottom:'1px solid var(--border2)' }}>
+                {cat}
+              </div>
+              {codes.map(([code, lbl]) => {
+                const already = tags.find(t => t.code === code)
+                return (
+                  <button key={code} type="button"
+                    onClick={() => { if (!already) { onAdd({ code, label: lbl }); } else { onRemove({ code }) } }}
+                    style={{ width:'100%', padding:'8px 14px', textAlign:'left', background: already ? 'var(--bg2-data)' : 'none', border:'none', borderBottom:'1px solid var(--border2)', cursor:'pointer', fontSize:12, color: already ? 'var(--brand)' : 'var(--text)', display:'flex', gap:10, alignItems:'center', fontFamily:'var(--fb)' }}
+                    onMouseEnter={e => { if (!already) e.currentTarget.style.background = 'var(--bg)' }}
+                    onMouseLeave={e => { if (!already) e.currentTarget.style.background = 'none' }}>
+                    <span style={{ fontFamily:'var(--fm)', fontSize:10, color: already ? 'var(--brand)' : 'var(--t3)', flexShrink:0, minWidth:42 }}>{code}</span>
+                    <span style={{ flex:1 }}>{lbl}</span>
+                    {already && <span style={{ fontSize:11, color:'var(--brand)', flexShrink:0 }}>✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input recherche */}
-      <div style={{ position:'relative' }}>
-        <input
-          value={q} onChange={e => setQ(e.target.value)}
-          placeholder={tags.length > 0 ? `+ Ajouter ${placeholder}` : placeholder}
-          style={{ width:'100%', padding:'9px 13px', border:'1px solid var(--border)', borderRadius:'var(--r-md)', fontSize:13, fontFamily:'var(--fb)', outline:'none', background:'var(--white)', color:'var(--text)' }}
-        />
-        {filtered.length > 0 && (
-          <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:'var(--r-md)', boxShadow:'var(--sh2)', zIndex:100, marginTop:4, maxHeight:240, overflowY:'auto' }}>
-            {filtered.map(s => (
-              <button key={s.code || s.nom} onClick={() => { onAdd(s); setQ('') }}
-                style={{ width:'100%', padding:'9px 14px', textAlign:'left', background:'none', border:'none', borderBottom:'1px solid var(--border2)', cursor:'pointer', fontSize:13, color:'var(--text)', display:'flex', gap:10, alignItems:'center', fontFamily:'var(--fb)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                {s.code && <span style={{ fontFamily:'var(--fm)', fontSize:11, color:'var(--t3)', flexShrink:0 }}>{s.code}</span>}
-                <span>{s.label || s.nom}</span>
-                {s.cat && <span style={{ fontSize:10, color:'var(--t4)', marginLeft:'auto' }}>{s.cat}</span>}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {tags.length === 0 && <div style={{ fontSize:11, color:'var(--t3)', marginTop:5 }}>Tapez au moins 2 caractères pour rechercher</div>}
+      {!browsing && (
+        <div style={{ position:'relative' }}>
+          <input
+            value={q} onChange={e => setQ(e.target.value)}
+            placeholder={tags.length > 0 ? `+ Ajouter ${placeholder}` : placeholder}
+            style={{ width:'100%', padding:'9px 13px', border:'1px solid var(--border)', borderRadius:'var(--r-md)', fontSize:13, fontFamily:'var(--fb)', outline:'none', background:'var(--white)', color:'var(--text)' }}
+          />
+          {filtered.length > 0 && (
+            <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:'var(--r-md)', boxShadow:'var(--sh2)', zIndex:100, marginTop:4, maxHeight:240, overflowY:'auto' }}>
+              {filtered.map(s => (
+                <button key={s.code || s.nom} onClick={() => { onAdd(s); setQ('') }}
+                  style={{ width:'100%', padding:'9px 14px', textAlign:'left', background:'none', border:'none', borderBottom:'1px solid var(--border2)', cursor:'pointer', fontSize:13, color:'var(--text)', display:'flex', gap:10, alignItems:'center', fontFamily:'var(--fb)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  {s.code && <span style={{ fontFamily:'var(--fm)', fontSize:11, color:'var(--t3)', flexShrink:0 }}>{s.code}</span>}
+                  <span>{s.label || s.nom}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!q && tags.length === 0 && (
+            <div style={{ fontSize:11, color:'var(--t3)', marginTop:5 }}>
+              Tapez pour rechercher · ou cliquez <strong>Parcourir tous</strong> pour voir les {suggestions.length} codes disponibles
+            </div>
+          )}
+          {q && q.length < 2 && <div style={{ fontSize:11, color:'var(--t3)', marginTop:5 }}>Tapez au moins 2 caractères</div>}
+        </div>
+      )}
     </div>
   )
 }
@@ -359,11 +404,13 @@ export default function NouvelleBase() {
               {/* APE multi */}
               <TagInput
                 label="Secteurs APE" source="INSEE NAF" sourceUrl="https://www.data.gouv.fr/datasets/codes-et-libelles-naf-niveau-2"
-                placeholder="Rechercher un secteur (ex: pub, cosm, conseil…)"
+                placeholder="Rechercher ou parcourir un secteur…"
                 tags={form.apes.map(a => ({ ...a, label: `${a.code} — ${a.label}` }))}
                 suggestions={APE_FLAT.map(a => ({ ...a, label: `${a.label}` }))}
                 onAdd={a => addApe({ code: a.code, label: a.label })}
                 onRemove={a => removeApe({ code: a.code })}
+                showGrouped={true}
+                groupedData={NAF_SECTORS}
               />
 
               {/* Département multi */}

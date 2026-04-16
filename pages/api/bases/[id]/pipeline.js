@@ -119,7 +119,12 @@ Pays : ${base.country_label || base.country_code || 'FR'}${base.intl_city ? ` â€
         model:       'claude-sonnet-4-20250514',
         max_tokens:  8192,
         system,
-        mcp_servers: [{ type: 'url', url: 'https://mcp.icypeas.com/mcp', name: 'icypeas' }],
+        mcp_servers: [{
+          type: 'url',
+          url:  'https://mcp.icypeas.com/mcp',
+          name: 'icypeas',
+          authorization_token: process.env.ICYPEAS_API_KEY,
+        }],
         messages:    [{ role: 'user', content: user }],
       }),
     })
