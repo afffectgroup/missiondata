@@ -1,14 +1,38 @@
 /**
- * Pipeline complet — Anthropic API avec Datagouv MCP + Icypeas MCP
- * 1. Claude appelle Datagouv MCP → entreprises SIRENE par code APE
- * 2. Claude appelle Icypeas MCP → contacts dans ces entreprises + emails
- * 3. Save Supabase
- * SSE pour logs en temps réel
+ * Pipeline direct — SIRENE REST + Icypeas REST
+ * Pas de MCP, pas d'Anthropic API — appels directs serveur-to-serveur
+ * SSE pour logs temps réel
  */
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin'
 
 export const config = { api: { responseLimit: false } }
+
+const ICYPEAS_BASE = 'https://app.icypeas.com/api'
+
+async function icypeas(path, body) {
+  const r = await fetch(`${ICYPEAS_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: process.env.ICYPEAS_API_KEY },
+    body: JSON.stringify(body),
+  })
+  const text = await r.text()
+  try { return JSON.parse(text) }
+  catch { throw new Error(`Icypeas ${path}: ${text.slice(0, 150)}`) }
+}
+
+async function sireneSearch(apeCode, dept, effectif, perPage) {
+  const p = new URLSearchParams({ per_page: perPage, page: 1 })
+  if (apeCode)   p.set('activite_principale', apeCode.replace('.', ''))
+  if (dept)      p.set('departement', dept)
+  if (effectif)  p.set('tranche_effectif_salarie', effectif)
+  const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'MissionData/1.0' }
+  })
+  if (!r.ok) throw new Error(`SIRENE ${r.status}`)
+  const d = await r.json()
+  return d.results || []
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -17,7 +41,7 @@ export default async function handler(req, res) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return res.status(401).json({ error: 'Non authentifié' })
 
-  const { id } = req.query
+  const { id }  = req.query
   const admin   = getSupabaseAdmin()
   const { data: base } = await admin.from('campaigns').select('*').eq('id', id).single()
   if (!base || base.user_id !== session.user.id) return res.status(403).json({ error: 'Accès refusé' })
@@ -37,135 +61,139 @@ export default async function handler(req, res) {
     await admin.from('campaigns').update({ status: 'generating', generation_pct: 0 }).eq('id', id)
     await admin.from('prospects').delete().eq('campaign_id', id)
 
-    const isFR   = (base.mode || 'france') !== 'international'
-    const titles = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
+    const isFR    = (base.mode || 'france') !== 'international'
+    const titles  = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
     const apeCodes  = (base.ape_code    || '').split(',').map(s => s.trim()).filter(Boolean)
     const deptCodes = (base.departement || '').split(',').map(s => s.trim()).filter(Boolean)
     const effCodes  = (base.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
-    const nCo       = base.n_companies || 10
+    const nCo = base.n_companies || 10
 
-    log('Connexion Anthropic + MCPs…', 'i')
+    let companies = []
 
-    // ── Prompt selon mode ──
-    const system = `Tu es un assistant expert en prospection B2B.
-Tu as accès aux outils Datagouv (SIRENE) et Icypeas.
-Retourne UNIQUEMENT un JSON valide sans texte autour.
-Format exact :
-{"companies":[{"name":"","siren":"","ville":""}],"leads":[{"fullname":"","job_title":"","company":"","email":"","certainty":"","linkedin_url":"","location":""}]}`
-
-    let user
+    // ── Étape 1 : SIRENE ──
     if (isFR) {
-      const apeList    = apeCodes.map(c => c.replace('.', '')).join(', ') || '7311Z'
-      const deptFilter = deptCodes.length ? `département(s) : ${deptCodes.join(', ')}` : 'toute la France'
-      const effFilter  = effCodes.length  ? `taille : ${effCodes.join(', ')} (code tranche effectif)` : 'toutes tailles'
+      log('↗ SIRENE — recherche entreprises…', 'i')
 
-      user = `Effectue une recherche de prospection B2B en France :
+      const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
+      const deptsToSearch = deptCodes.length ? deptCodes : ['']
+      const perApe        = Math.max(Math.ceil(nCo / apesToSearch.length), 3)
 
-**Étape 1 — Recherche SIRENE via l'API Recherche d'Entreprises**
-Appelle l'outil dataservices ou search avec :
-- URL : https://recherche-entreprises.api.gouv.fr/search
-- Paramètre activite_principale : ${apeList}
-- ${deptFilter}
-- ${effFilter}
-- per_page : ${nCo}
+      const calls = []
+      for (const ape of apesToSearch) {
+        for (const dept of deptsToSearch) {
+          calls.push(
+            sireneSearch(ape, dept, effCodes[0] || '', perApe)
+              .catch(e => { log(`⚠ SIRENE partiel: ${e.message}`, 'w'); return [] })
+          )
+        }
+      }
 
-**Étape 2 — Recherche contacts via Icypeas**
-Utilise find-people avec :
-- currentJobTitle.include : [${titles.map(t => JSON.stringify(t)).join(',')}]
-- currentCompanyName.include : [noms des sociétés trouvées à l'étape 1, max 20]
-- location.include : ["FR"]
-- maxResults : ${nCo}
+      const batches = await Promise.all(calls)
+      const seen    = new Set()
+      for (const batch of batches) {
+        for (const co of batch) {
+          if (co.siren && !seen.has(co.siren)) {
+            seen.add(co.siren)
+            companies.push(co)
+          }
+        }
+      }
 
-**Étape 3 — Enrichissement emails**
-Appelle bulk-email-search sur tous les contacts trouvés.
+      if (!companies.length) {
+        await admin.from('campaigns').update({ status: 'draft', generation_pct: 0 }).eq('id', id)
+        return fail('Aucune société trouvée dans SIRENE. Vérifiez le code APE ou élargissez les filtres.')
+      }
 
-Retourne UNIQUEMENT {"companies":[...],"leads":[...]} — rien d'autre.`
-    } else {
-      user = `Effectue une recherche de prospection B2B internationale :
-
-**Étape 1 — Icypeas find-people**
-- currentJobTitle.include : [${titles.map(t => JSON.stringify(t)).join(',')}]
-- location.include : [${JSON.stringify(base.intl_city || base.country_code || 'FR')}]
-${base.intl_sector ? `- keyword.include : [${JSON.stringify(base.intl_sector)}]` : ''}
-- maxResults : ${nCo}
-
-**Étape 2 — bulk-email-search**
-Enrichis tous les contacts.
-
-Retourne UNIQUEMENT {"companies":[],"leads":[...]} — rien d'autre.`
+      log(`✓ ${companies.length} sociétés SIRENE`, 's')
+      send('companies', { count: companies.length, names: companies.slice(0, 5).map(c => c.nom_raison_sociale) })
     }
 
-    const mcpServers = [
-      { type: 'url', url: 'https://mcp.icypeas.com/mcp',  name: 'icypeas',  authorization_token: process.env.ICYPEAS_API_KEY },
-      { type: 'url', url: 'https://mcp.data.gouv.fr/mcp', name: 'datagouv' },
-    ]
+    // ── Étape 2 : Icypeas find-people ──
+    log('↗ Icypeas — recherche contacts…', 't')
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method:  'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta':    'mcp-client-2025-04-04',
-      },
-      body: JSON.stringify({
-        model:       'claude-sonnet-4-20250514',
-        max_tokens:  8192,
-        system,
-        mcp_servers: mcpServers,
-        messages:    [{ role: 'user', content: user }],
-      }),
-    })
-
-    if (!anthropicRes.ok) {
-      const e = await anthropicRes.json().catch(() => ({}))
-      return fail(`Erreur API : ${e.error?.message || anthropicRes.status}`)
+    const query = { currentJobTitle: { include: titles }, location: { include: ['FR'] } }
+    if (isFR && companies.length) {
+      query.currentCompanyName = { include: companies.slice(0, 20).map(c => c.nom_raison_sociale).filter(Boolean) }
+    } else if (!isFR) {
+      query.location = { include: [base.intl_city || base.country_code || 'FR'] }
+      if (base.intl_sector) query.keyword = { include: [base.intl_sector] }
     }
 
-    const apiData = await anthropicRes.json()
+    const fp = await icypeas('/find-people', { query, maxResults: nCo })
+    const people = Array.isArray(fp) ? fp : (fp.items || fp.leads || [])
 
-    // Log tool calls
-    for (const blk of (apiData.content || [])) {
-      if (blk.type === 'tool_use' || blk.type === 'mcp_tool_use') {
-        log(`⚙ ${blk.name}`, 't')
+    if (!people.length) {
+      await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
+      return fail('Aucun contact trouvé — essayez des postes différents ou des critères plus larges.')
+    }
+
+    log(`✓ ${people.length} contacts trouvés`, 's')
+
+    // ── Étape 3 : Email bulk search ──
+    log('↗ Icypeas — enrichissement emails…', 't')
+
+    const emailInput = people
+      .filter(p => p.firstname && p.lastname && (p.lastCompanyWebsite || p.lastCompanyName))
+      .map(p => ({
+        firstname:       p.firstname,
+        lastname:        p.lastname,
+        domainOrCompany: p.lastCompanyWebsite || p.lastCompanyName,
+      }))
+
+    let emailMap = {}
+
+    if (emailInput.length) {
+      try {
+        const bulk = await icypeas('/bulk-single-searchs', {
+          name: `md-${id.slice(0, 8)}-${Date.now()}`,
+          task: 'email-search',
+          data: emailInput.map(e => [e.firstname, e.lastname, e.domainOrCompany]),
+        })
+
+        const batchId = bulk?.item?._id || bulk?._id
+        if (batchId) {
+          // Poll jusqu'à 45s
+          for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 3000))
+            const poll = await icypeas('/bulk-single-searchs/read', { id: batchId })
+            const items = poll?.items || []
+            for (const item of items) {
+              if (item.results?.emails?.[0]) {
+                const k = `${item.results.firstname?.toLowerCase()}_${item.results.lastname?.toLowerCase()}`
+                emailMap[k] = { email: item.results.emails[0].email, certainty: item.results.emails[0].certainty }
+              }
+            }
+            const status = poll?.item?.status || poll?.status || ''
+            if (['DONE','PARTIALLY_DONE','FAILED'].some(s => status.includes(s))) break
+          }
+        }
+      } catch (e) {
+        log(`⚠ Email enrichment: ${e.message}`, 'w')
       }
     }
 
-    // Extract JSON
-    const rawText = (apiData.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
-    const m = rawText.match(/[{][\s\S]*[}]/)
-    if (!m) return fail('Réponse invalide — réessayez')
+    const enriched = people.filter(p => emailMap[`${p.firstname?.toLowerCase()}_${p.lastname?.toLowerCase()}`]).length
+    log(`✓ ${enriched}/${people.length} emails enrichis`, 's')
 
-    let result
-    try { result = JSON.parse(m[0]) }
-    catch { return fail('JSON invalide — réessayez') }
-
-    const companies = result.companies || []
-    const leads     = result.leads     || []
-
-    log(`✓ ${companies.length} sociétés · ${leads.length} contacts (${leads.filter(l => l.email).length} emails)`, 's')
-
-    if (!leads.length) {
-      await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
-      return fail('Aucun contact trouvé — essayez avec des critères plus larges')
-    }
-
-    // Save
+    // ── Étape 4 : Sauvegarde ──
     log('Sauvegarde…', 'i')
-    const sirenMap = Object.fromEntries(companies.map(c => [(c.name || '').toLowerCase(), c]))
-    const records  = leads.map(l => {
-      const co = sirenMap[(l.company || '').toLowerCase()] || {}
+    const sirenMap = Object.fromEntries(companies.map(c => [(c.nom_raison_sociale || '').toLowerCase(), c]))
+
+    const records = people.map(p => {
+      const k  = `${p.firstname?.toLowerCase()}_${p.lastname?.toLowerCase()}`
+      const em = emailMap[k] || {}
+      const co = sirenMap[(p.lastCompanyName || '').toLowerCase()] || {}
       return {
         campaign_id:  id,
         user_id:      session.user.id,
-        fullname:     l.fullname  || '',
-        job_title:    l.job_title || '',
-        company:      l.company   || '',
-        email:        l.email     || null,
-        email_cert:   l.certainty || null,
-        linkedin_url: l.linkedin_url || null,
-        location:     l.location  || co.ville || null,
-        sector:       base.ape_label || base.intl_sector || '',
+        fullname:     [p.firstname, p.lastname].filter(Boolean).join(' '),
+        job_title:    p.lastJobTitle || p.headline || '',
+        company:      p.lastCompanyName || '',
+        email:        em.email     || null,
+        email_cert:   em.certainty || null,
+        linkedin_url: p.profileUrl || null,
+        location:     p.address || co.siege?.libelle_commune || null,
+        sector:       p.lastCompanyIndustry || base.ape_label || base.intl_sector || '',
         source:       'icypeas',
       }
     })
