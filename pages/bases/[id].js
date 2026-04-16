@@ -100,23 +100,118 @@ export default function BasePage() {
     setContacts(data || [])
   }
 
-  // Accept optional baseData to avoid stale closure (autostart case)
-  // ── Pipeline via SSE (Server-Sent Events) ─ tout côté serveur ──
+  // baseData uniquement pour l'autostart — sinon on utilise le state `base`
+  // IMPORTANT: onClick passe un SyntheticEvent comme premier arg, il faut l'ignorer
+  // baseData uniquement pour l'autostart — sinon on utilise le state `base`
   async function generate(baseData) {
-    const b = baseData || base
+    const b = (baseData && baseData.id) ? baseData : base
     if (!b) { setError('Données non chargées — rechargez la page.'); return }
     setRunning(true); setError('')
-    setLogs([{ msg: 'Connexion au pipeline…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
+    setLogs([{ msg: 'Démarrage…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
+
+    const addLog = (msg, type = 'i') =>
+      setLogs(prev => [...prev, { msg, type, ts: new Date().toLocaleTimeString('fr-FR') }])
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      const isFR = (b.mode || 'france') !== 'international'
+      let companies = []
+
+      // ── Étape 1 : SIRENE depuis le navigateur (accessible en CORS) ──
+      if (isFR) {
+        addLog('↗ SIRENE — recherche entreprises…', 'i')
+
+        const apeCodes  = (b.ape_code    || '').split(',').map(s => s.trim()).filter(Boolean)
+        const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
+        const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
+        const nCo       = b.n_companies || 10
+        const perApe    = Math.max(Math.ceil(nCo / Math.max(apeCodes.length, 1)), 5)
+
+        const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
+        const deptsToSearch = deptCodes.length ? deptCodes : ['']
+
+        const sirenePromises = []
+        for (const ape of apesToSearch) {
+          for (const dept of deptsToSearch) {
+            const p = new URLSearchParams({ per_page: perApe, page: 1, etat_administratif: 'A' })
+            if (ape)  p.set('activite_principale', ape)
+            if (dept) p.set('departement', dept)
+            if (effCodes.length) p.set('tranche_effectif_salarie', effCodes[0])
+            sirenePromises.push(
+              fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, { headers: { Accept: 'application/json' } })
+                .then(r => r.ok ? r.json() : { results: [], total_results: 0 })
+                .then(d => ({ results: d.results || [], total: d.total_results || 0 }))
+                .catch(() => ({ results: [], total: 0 }))
+            )
+          }
+        }
+
+        const batches = await Promise.all(sirenePromises)
+        const seen = new Set()
+        for (const batch of batches) {
+          for (const co of batch.results) {
+            if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
+          }
+        }
+
+        const total = batches.reduce((acc, b) => acc + b.total, 0)
+        addLog(`SIRENE: ${companies.length} sociétés récupérées (${total} dispo au total)`, companies.length > 0 ? 's' : 'w')
+
+        // Fallback sans effectif
+        if (!companies.length && effCodes.length) {
+          addLog('Réessai sans filtre taille…', 'w')
+          const fb = await Promise.all(apesToSearch.flatMap(ape =>
+            deptsToSearch.map(dept => {
+              const p = new URLSearchParams({ per_page: perApe, page: 1, etat_administratif: 'A' })
+              if (ape)  p.set('activite_principale', ape)
+              if (dept) p.set('departement', dept)
+              return fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`)
+                .then(r => r.ok ? r.json() : { results: [] })
+                .then(d => d.results || [])
+                .catch(() => [])
+            })
+          ))
+          for (const batch of fb) {
+            for (const co of batch) {
+              if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
+            }
+          }
+          addLog(`Fallback sans taille: ${companies.length} sociétés`, companies.length > 0 ? 's' : 'w')
+        }
+
+        // Fallback sans département
+        if (!companies.length && deptCodes.length) {
+          addLog('Réessai sans filtre département…', 'w')
+          const fb = await Promise.all(apesToSearch.map(ape => {
+            const p = new URLSearchParams({ per_page: nCo, page: 1, etat_administratif: 'A' })
+            if (ape) p.set('activite_principale', ape)
+            return fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`)
+              .then(r => r.ok ? r.json() : { results: [] })
+              .then(d => d.results || [])
+              .catch(() => [])
+          }))
+          for (const batch of fb) {
+            for (const co of batch) {
+              if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
+            }
+          }
+          addLog(`Fallback sans dept: ${companies.length} sociétés`, companies.length > 0 ? 's' : 'w')
+        }
+
+        if (companies.length > 0) {
+          addLog(`✓ ${companies.length} sociétés SIRENE`, 's')
+        } else {
+          addLog('SIRENE: 0 résultat — Icypeas recherche directe par secteur', 'w')
+        }
+      }
+
+      // ── Étape 2+3 : Icypeas côté serveur via SSE ──
+      addLog('↗ Icypeas — recherche contacts + emails…', 't')
 
       const es = await fetch(`/api/bases/${id}/pipeline`, {
         method:  'POST',
-        headers: {
-          Authorization:  `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companies }),
       })
 
       if (!es.ok) {
@@ -124,19 +219,18 @@ export default function BasePage() {
         throw new Error(e.error || `Erreur ${es.status}`)
       }
 
+      // Lire le stream SSE
       const reader  = es.body.getReader()
       const decoder = new TextDecoder()
-      let   buffer  = ''
+      const SEP     = '\n\n'
+      let buffer    = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         buffer += decoder.decode(value, { stream: true })
-        const SEP = '\n\n'
         const parts = buffer.split(SEP)
-        buffer = parts.pop() // keep incomplete chunk
-
+        buffer = parts.pop()
         for (const part of parts) {
           const line = part.replace(/^data: /, '').trim()
           if (!line) continue
@@ -144,11 +238,6 @@ export default function BasePage() {
             const ev = JSON.parse(line)
             if (ev.type === 'log') {
               setLogs(prev => [...prev, { msg: ev.msg, type: ev.t, ts: ev.ts }])
-            } else if (ev.type === 'companies') {
-              setLogs(prev => [...prev, {
-                msg: `  Sociétés : ${ev.names?.join(', ')}${ev.count > 5 ? '…' : ''}`,
-                type: 'i', ts: new Date().toLocaleTimeString('fr-FR')
-              }])
             } else if (ev.type === 'done') {
               await fetchContacts()
               setBase(prev => ({ ...prev, status: 'done', generation_pct: 100, prospects_count: ev.count }))
