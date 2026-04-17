@@ -131,20 +131,23 @@ export default function BasePage() {
 
         const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
         const deptsToSearch = deptCodes.length ? deptCodes : ['']
+        const effsToSearch  = effCodes.length  ? effCodes  : ['']
 
         const sirenePromises = []
         for (const ape of apesToSearch) {
           for (const dept of deptsToSearch) {
-            const p = new URLSearchParams({ per_page: perApe, page: 1, etat_administratif: 'A' })
-            if (ape)  p.set('activite_principale', ape)
-            if (dept) p.set('departement', dept)
-            if (effCodes.length) p.set('tranche_effectif_salarie', effCodes[0])
-            sirenePromises.push(
-              fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, { headers: { Accept: 'application/json' } })
-                .then(r => r.ok ? r.json() : { results: [], total_results: 0 })
-                .then(d => ({ results: d.results || [], total: d.total_results || 0 }))
-                .catch(() => ({ results: [], total: 0 }))
-            )
+            for (const eff of effsToSearch) {
+              const p = new URLSearchParams({ per_page: perApe, page: 1, etat_administratif: 'A' })
+              if (ape)  p.set('activite_principale', ape)
+              if (dept) p.set('departement', dept)
+              if (eff)  p.set('tranche_effectif_salarie', eff)
+              sirenePromises.push(
+                fetch(`https://recherche-entreprises.api.gouv.fr/search?${p}`, { headers: { Accept: 'application/json' } })
+                  .then(r => r.ok ? r.json() : { results: [], total_results: 0 })
+                  .then(d => ({ results: d.results || [], total: d.total_results || 0 }))
+                  .catch(() => ({ results: [], total: 0 }))
+              )
+            }
           }
         }
 

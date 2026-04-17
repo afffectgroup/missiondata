@@ -4,6 +4,7 @@
  */
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin'
+import { regionsFromDeptCodes, addressMatchesTerms } from '../../../../lib/france-regions'
 
 export const config = { api: { responseLimit: false } }
 
@@ -76,20 +77,30 @@ export default async function handler(req, res) {
 
     // Build base query avec géographie précise — CRITIQUE : on garde la géo dans TOUTES les tentatives
     const baseQuery = { currentJobTitle: { include: titlesList } }
+
+    // Termes géographiques pour location Icypeas ET post-filter par address
+    let geoTerms = []
+
     if (isFR) {
-      // France : on ajoute les noms de départements/régions au filtre location
-      // Icypeas fait du fuzzy match sur "Ille-et-Vilaine", "Rennes, France", etc.
-      const locationTerms = ['FR']
       if (base.dept_label) {
-        // dept_label peut contenir plusieurs noms séparés par ", " (si multi-dept)
         const depts = base.dept_label.split(',').map(s => s.trim()).filter(Boolean)
-        locationTerms.push(...depts)
+        geoTerms.push(...depts)
       }
-      baseQuery.location = { include: locationTerms }
-      log(`  Géo: ${locationTerms.join(' · ')}`, 'i')
+      // Ajout automatique des régions correspondantes (meilleur matching LinkedIn)
+      const regions = regionsFromDeptCodes(deptCodes)
+      geoTerms.push(...regions)
+
+      // Location Icypeas :
+      // - Si départements précis → PAS de 'FR' fallback (trop large, ramène toute la France)
+      // - Si aucun département → 'FR' par défaut
+      baseQuery.location = {
+        include: geoTerms.length ? geoTerms : ['FR'],
+      }
+      log(`  Géo: ${baseQuery.location.include.join(' · ')}`, 'i')
     } else {
       const loc = base.intl_city || base.country_code || 'FR'
       baseQuery.location = { include: [loc] }
+      geoTerms = [loc, base.country_label].filter(Boolean)
     }
 
     // Tentative 1 : ciblage précis
@@ -102,8 +113,32 @@ export default async function handler(req, res) {
       if (kw) query1.keyword = { include: [kw] }
       log(`  Tentative 1 — keyword "${kw}" + postes`, 'i')
     } else {
-      if (base.intl_sector) query1.keyword = { include: [base.intl_sector] }
-      log(`  Tentative 1 — ${base.country_label || base.country_code} · ${base.intl_sector || 'tous secteurs'}`, 'i')
+      // INTERNATIONAL : traduire le secteur FR → EN pour matcher les profils anglophones
+      // Icypeas cherche dans tout le profil (headline, job titles, descriptions, skills)
+      if (base.intl_sector) {
+        const SECTOR_KEYWORDS = {
+          'Cosmétique & Beauté':  ['cosmetics', 'beauty', 'skincare', 'makeup', 'cosmetic'],
+          'Mode & Luxe':          ['fashion', 'luxury', 'apparel', 'couture'],
+          'Tech & SaaS':          ['software', 'SaaS', 'technology', 'tech'],
+          'Finance & Fintech':    ['finance', 'fintech', 'banking', 'investment'],
+          'Santé & Biotech':      ['healthcare', 'biotech', 'pharma', 'medical'],
+          'E-commerce & Retail':  ['ecommerce', 'retail', 'commerce'],
+          'Marketing & Digital':  ['marketing', 'digital', 'advertising'],
+          'Conseil & Stratégie':  ['consulting', 'strategy', 'advisory'],
+          'Immobilier':           ['real estate', 'property', 'realty'],
+          'Industrie & Manufacturing': ['manufacturing', 'industrial', 'industry'],
+          'Énergie & Environnement':   ['energy', 'sustainability', 'renewable'],
+          'Education & Formation':     ['education', 'training', 'edtech'],
+          'Médias & Divertissement':   ['media', 'entertainment', 'publishing'],
+          'Agroalimentaire':           ['food', 'beverage', 'agrifood'],
+          'Transport & Logistique':    ['logistics', 'transport', 'supply chain'],
+        }
+        const kws = SECTOR_KEYWORDS[base.intl_sector] || [base.intl_sector]
+        query1.keyword = { include: kws }
+        log(`  Tentative 1 — ${base.country_label || base.country_code} · secteur "${base.intl_sector}" → [${kws.join(', ')}]`, 'i')
+      } else {
+        log(`  Tentative 1 — ${base.country_label || base.country_code} · tous secteurs`, 'i')
+      }
     }
 
     try {
@@ -113,13 +148,14 @@ export default async function handler(req, res) {
       log(`  ⚠ Tentative 1 échouée : ${e.message}`, 'w')
     }
 
-    // Tentative 2 : élargir avec keyword secteur
+    // Tentative 2 : élargir (France seulement — passe du filtre entreprise au keyword secteur)
     if (people.length < 3 && isFR && companies.length > 0) {
-      const kw = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
-      if (kw) {
-        log(`  Tentative 2 — keyword "${kw}" + postes`, 'i')
+      // Utiliser TOUS les libellés APE (l'user peut en avoir coché 6)
+      const kws = (base.ape_label || '').split(',').map(s => s.trim()).filter(Boolean)
+      if (kws.length) {
+        log(`  Tentative 2 — keywords [${kws.join(', ')}] + postes`, 'i')
         try {
-          const moreResults = await findPeople({ ...baseQuery, keyword: { include: [kw] } }, icyPageSize)
+          const moreResults = await findPeople({ ...baseQuery, keyword: { include: kws } }, icyPageSize)
           // Merge et dédupe par profileUrl
           const existingUrls = new Set(people.map(p => p.profileUrl).filter(Boolean))
           for (const p of moreResults) {
@@ -135,11 +171,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // Tentative 3 : postes + location seulement
-    // ⚠ Ne déclencher QUE si l'user n'a PAS spécifié de filtre géographique précis
-    // Sinon on retournerait des contacts de n'importe où en France
+    // Tentative 3 : postes + location seulement (SANS keyword secteur)
+    // ⚠ Ne déclencher QUE si l'user n'a spécifié NI géo précise NI secteur
+    // Sinon on retournerait des contacts random (mauvais secteur OU mauvaise géo)
     const hasGeoFilter = isFR ? deptCodes.length > 0 : !!base.intl_city
-    if (people.length < 3 && !hasGeoFilter) {
+    const hasSectorFilter = isFR ? !!base.ape_code : !!base.intl_sector
+    if (people.length < 3 && !hasGeoFilter && !hasSectorFilter) {
       log(`  Tentative 3 — postes + location seulement`, 'i')
       try {
         const moreResults = await findPeople(baseQuery, icyPageSize)
@@ -154,8 +191,11 @@ export default async function handler(req, res) {
       } catch (e) {
         log(`  ⚠ Tentative 3 échouée : ${e.message}`, 'w')
       }
-    } else if (people.length < 3 && hasGeoFilter) {
-      log(`  ℹ Peu de résultats, mais filtre géo strict maintenu (${base.dept_label || base.intl_city})`, 'i')
+    } else if (people.length < 3 && (hasGeoFilter || hasSectorFilter)) {
+      const maintained = []
+      if (hasGeoFilter)    maintained.push(`géo ${base.dept_label || base.intl_city}`)
+      if (hasSectorFilter) maintained.push(`secteur ${base.ape_label || base.intl_sector}`)
+      log(`  ℹ Peu de résultats, filtres stricts maintenus (${maintained.join(' + ')})`, 'i')
     }
 
     if (!people.length) {
@@ -163,7 +203,23 @@ export default async function handler(req, res) {
       return fail('Aucun contact trouvé après 3 tentatives. Essayez : postes plus génériques (CEO au lieu de Directeur Général), secteur plus large, ou une autre localisation.')
     }
 
-    log(`✓ ${people.length} contacts trouvés (après dédup)`, 's')
+    // ── POST-FILTER GÉOGRAPHIQUE STRICT ──
+    // Icypeas fait du fuzzy match sur location et peut retourner des profils hors zone.
+    // On vérifie que l'adresse contient AU MOINS UN des termes géographiques demandés.
+    if (geoTerms.length) {
+      const before = people.length
+      people = people.filter(p => addressMatchesTerms(p.address, geoTerms))
+      if (before !== people.length) {
+        log(`  Filtre géo strict: ${people.length}/${before} contacts (adresses contenant ${geoTerms.slice(0,3).join('/')}...)`, 'i')
+      }
+    }
+
+    if (!people.length) {
+      await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
+      return fail(`Aucun contact dans la zone demandée (${geoTerms.slice(0,3).join(', ')}). Essayez d'élargir les critères géographiques.`)
+    }
+
+    log(`✓ ${people.length} contacts trouvés (après dédup + filtre géo)`, 's')
 
     // ── SAUVEGARDE IMMÉDIATE des contacts (sans emails) ──
     // Important : on sauvegarde TOUT DE SUITE pour éviter les timeouts Railway
