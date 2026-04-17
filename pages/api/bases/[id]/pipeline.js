@@ -54,40 +54,74 @@ export default async function handler(req, res) {
     const titles = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
     const nCo    = base.n_companies || 10
 
-    // ── Icypeas find-people ──
+    // ── Icypeas find-people avec fallbacks robustes ──
     log('↗ Icypeas find-people…', 't')
 
-    const query = { currentJobTitle: { include: titles } }
+    const titlesList = titles
+    let people = []
 
+    // Build base query
+    const baseQuery = { currentJobTitle: { include: titlesList } }
     if (isFR) {
-      if (companies.length > 0) {
-        // SIRENE a retourné des sociétés → cibler exactement ces entreprises
-        const names = companies.slice(0, 20).map(c => c.nom_raison_sociale).filter(Boolean)
-        query.currentCompanyName = { include: names }
-        query.location = { include: ['FR'] }
-        log(`  Ciblage de ${names.length} sociétés SIRENE`, 'i')
-      } else {
-        // 0 sociétés SIRENE → recherche par secteur APE comme keyword
-        query.location = { include: ['FR'] }
-        const keyword = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
-        if (keyword) {
-          query.keyword = { include: [keyword] }
-          log(`  Recherche directe par secteur: ${keyword}`, 'i')
-        }
-      }
+      baseQuery.location = { include: ['FR'] }
     } else {
-      // International
       const loc = base.intl_city || base.country_code || 'FR'
-      query.location = { include: [loc] }
-      if (base.intl_sector) query.keyword = { include: [base.intl_sector] }
+      baseQuery.location = { include: [loc] }
     }
 
-    const fp   = await icy('/find-people', { query, maxResults: nCo })
-    const people = Array.isArray(fp) ? fp : (fp.items || fp.leads || [])
+    // Tentative 1 : ciblage précis (entreprises SIRENE OU keyword secteur)
+    let query1 = { ...baseQuery }
+    if (isFR && companies.length > 0) {
+      query1.currentCompanyName = { include: companies.slice(0, 20).map(c => c.nom_raison_sociale).filter(Boolean) }
+      log(`  Tentative 1 — ${query1.currentCompanyName.include.length} entreprises + postes`, 'i')
+    } else if (isFR) {
+      const kw = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
+      if (kw) query1.keyword = { include: [kw] }
+      log(`  Tentative 1 — keyword "${kw}" + postes`, 'i')
+    } else {
+      if (base.intl_sector) query1.keyword = { include: [base.intl_sector] }
+      log(`  Tentative 1 — ${base.country_label || base.country_code} · ${base.intl_sector || 'tous secteurs'}`, 'i')
+    }
+
+    try {
+      const fp1 = await icy('/find-people', { query: query1, maxResults: nCo })
+      people = Array.isArray(fp1) ? fp1 : (fp1.items || fp1.leads || [])
+      log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+    } catch (e) {
+      log(`  ⚠ Tentative 1 échouée : ${e.message}`, 'w')
+    }
+
+    // Tentative 2 : si 0 avec entreprises ciblées, élargir avec keyword secteur APE
+    if (!people.length && isFR && companies.length > 0) {
+      const kw = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
+      if (kw) {
+        log(`  Tentative 2 — sans filtre entreprise, keyword "${kw}"`, 'i')
+        try {
+          const query2 = { ...baseQuery, keyword: { include: [kw] } }
+          const fp2 = await icy('/find-people', { query: query2, maxResults: nCo })
+          people = Array.isArray(fp2) ? fp2 : (fp2.items || fp2.leads || [])
+          log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+        } catch (e) {
+          log(`  ⚠ Tentative 2 échouée : ${e.message}`, 'w')
+        }
+      }
+    }
+
+    // Tentative 3 : sans keyword, juste postes + location (dernier recours)
+    if (!people.length) {
+      log(`  Tentative 3 — postes + location seulement`, 'i')
+      try {
+        const fp3 = await icy('/find-people', { query: baseQuery, maxResults: nCo })
+        people = Array.isArray(fp3) ? fp3 : (fp3.items || fp3.leads || [])
+        log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+      } catch (e) {
+        log(`  ⚠ Tentative 3 échouée : ${e.message}`, 'w')
+      }
+    }
 
     if (!people.length) {
       await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: 0 }).eq('id', id)
-      return fail('Aucun contact trouvé — essayez des critères différents.')
+      return fail('Aucun contact trouvé après 3 tentatives. Essayez : postes plus génériques (CEO au lieu de Directeur Général), secteur plus large, ou une autre localisation.')
     }
 
     log(`✓ ${people.length} contacts trouvés`, 's')

@@ -557,3 +557,8 @@ function EditPasswordForm({ onSave, onClose }) {
     </>
   )
 }
+
+// Force SSR — évite les erreurs d'hydration avec l'auth client-side
+export async function getServerSideProps() {
+  return { props: {} }
+}
