@@ -60,6 +60,14 @@ export default async function handler(req, res) {
     const titlesList = titles
     let people = []
 
+    // Helper: appel find-people avec le bon format (pagination.size, pas maxResults)
+    async function findPeople(query, size) {
+      const body = { query, pagination: { size } }
+      const res  = await icy('/find-people', body)
+      // Format de réponse Icypeas : { success, total, leads: [...] }
+      return res.leads || []
+    }
+
     // Build base query
     const baseQuery = { currentJobTitle: { include: titlesList } }
     if (isFR) {
@@ -69,7 +77,7 @@ export default async function handler(req, res) {
       baseQuery.location = { include: [loc] }
     }
 
-    // Tentative 1 : ciblage précis (entreprises SIRENE OU keyword secteur)
+    // Tentative 1 : ciblage précis
     let query1 = { ...baseQuery }
     if (isFR && companies.length > 0) {
       query1.currentCompanyName = { include: companies.slice(0, 20).map(c => c.nom_raison_sociale).filter(Boolean) }
@@ -84,22 +92,19 @@ export default async function handler(req, res) {
     }
 
     try {
-      const fp1 = await icy('/find-people', { query: query1, maxResults: nCo })
-      people = Array.isArray(fp1) ? fp1 : (fp1.items || fp1.leads || [])
+      people = await findPeople(query1, nCo)
       log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
     } catch (e) {
       log(`  ⚠ Tentative 1 échouée : ${e.message}`, 'w')
     }
 
-    // Tentative 2 : si 0 avec entreprises ciblées, élargir avec keyword secteur APE
+    // Tentative 2 : élargir avec keyword secteur
     if (!people.length && isFR && companies.length > 0) {
       const kw = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
       if (kw) {
         log(`  Tentative 2 — sans filtre entreprise, keyword "${kw}"`, 'i')
         try {
-          const query2 = { ...baseQuery, keyword: { include: [kw] } }
-          const fp2 = await icy('/find-people', { query: query2, maxResults: nCo })
-          people = Array.isArray(fp2) ? fp2 : (fp2.items || fp2.leads || [])
+          people = await findPeople({ ...baseQuery, keyword: { include: [kw] } }, nCo)
           log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
         } catch (e) {
           log(`  ⚠ Tentative 2 échouée : ${e.message}`, 'w')
@@ -107,12 +112,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // Tentative 3 : sans keyword, juste postes + location (dernier recours)
+    // Tentative 3 : postes + location seulement
     if (!people.length) {
       log(`  Tentative 3 — postes + location seulement`, 'i')
       try {
-        const fp3 = await icy('/find-people', { query: baseQuery, maxResults: nCo })
-        people = Array.isArray(fp3) ? fp3 : (fp3.items || fp3.leads || [])
+        people = await findPeople(baseQuery, nCo)
         log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
       } catch (e) {
         log(`  ⚠ Tentative 3 échouée : ${e.message}`, 'w')
@@ -127,6 +131,8 @@ export default async function handler(req, res) {
     log(`✓ ${people.length} contacts trouvés`, 's')
 
     // ── Email bulk search ──
+    // Doc: /bulk-search pour soumettre, /bulk-single-searchs/read pour récupérer
+    // Rate limit: /bulk-single-searchs/read = 30/min → min 2s entre polls
     log('↗ Icypeas email enrichment…', 't')
 
     const emailInput = people
@@ -140,26 +146,58 @@ export default async function handler(req, res) {
     let emailMap = {}
     if (emailInput.length) {
       try {
-        const bulk = await icy('/bulk-single-searchs', {
+        // 1. Soumettre le bulk
+        const bulk = await icy('/bulk-search', {
           name: `md-${id.slice(0,8)}-${Date.now()}`,
           task: 'email-search',
           data: emailInput.map(e => [e.firstname, e.lastname, e.domainOrCompany]),
         })
-        const batchId = bulk?.item?._id || bulk?._id
-        if (batchId) {
-          for (let i = 0; i < 15; i++) {
-            await new Promise(r => setTimeout(r, 3000))
-            const poll = await icy('/bulk-single-searchs/read', { id: batchId })
-            const items = Array.isArray(poll?.items) ? poll.items : []
-            for (const item of items) {
-              if (item.results?.emails?.[0]) {
-                const k = `${(item.results.firstname||'').toLowerCase()}_${(item.results.lastname||'').toLowerCase()}`
-                emailMap[k] = { email: item.results.emails[0].email, certainty: item.results.emails[0].certainty }
+        const fileId = bulk?.file || bulk?._id
+        if (!fileId) throw new Error('Pas de fileId retourné par /bulk-search')
+        log(`  Batch soumis (${emailInput.length} emails, fileId ${fileId.slice(0,8)}…)`, 'i')
+
+        // 2. Poll les résultats — max 2 minutes, 4s entre chaque poll (rate limit 30/min)
+        const maxAttempts = 30 // 30 * 4s = 120s
+        let batchDone = false
+
+        for (let i = 0; i < maxAttempts && !batchDone; i++) {
+          await new Promise(r => setTimeout(r, 4000))
+
+          // Récupérer les résultats du batch
+          const poll = await icy('/bulk-single-searchs/read', {
+            mode: 'bulk',
+            file: fileId,
+            limit: 100,
+          })
+
+          const items = Array.isArray(poll?.items) ? poll.items : []
+          for (const item of items) {
+            if (item.results?.emails?.[0]) {
+              const k = `${(item.results.firstname||'').toLowerCase()}_${(item.results.lastname||'').toLowerCase()}`
+              if (!emailMap[k]) {
+                emailMap[k] = {
+                  email:     item.results.emails[0].email,
+                  certainty: item.results.emails[0].certainty,
+                }
               }
             }
-            const status = poll?.item?.status || ''
-            if (['DONE','PARTIALLY_DONE','FAILED'].some(s => status.includes(s))) break
           }
+
+          // Vérifier si le batch est terminé via /search-files/read
+          try {
+            const fileStatus = await icy('/search-files/read', { file: fileId })
+            const status = fileStatus?.items?.[0]?.status || fileStatus?.file?.status || ''
+            if (status === 'done' || status.includes('done') || status.includes('finished')) {
+              batchDone = true
+              log(`  Batch terminé après ${(i+1)*4}s — ${Object.keys(emailMap).length} emails trouvés`, 's')
+            }
+          } catch (e) {
+            // Rate limit ou erreur temporaire — continuer
+          }
+        }
+
+        if (!batchDone) {
+          log(`  Timeout 120s — ${Object.keys(emailMap).length} emails récupérés partiels`, 'w')
         }
       } catch(e) {
         log(`⚠ Email enrichment: ${e.message}`, 'w')

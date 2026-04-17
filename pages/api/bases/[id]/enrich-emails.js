@@ -61,36 +61,53 @@ export default async function handler(req, res) {
   if (!input.length) return res.status(200).json({ enriched: 0, total: prospects.length })
 
   try {
-    // Submit bulk batch
-    const bulk = await icypeas('/bulk-single-searchs', {
+    // 1. Soumettre bulk batch via /bulk-search
+    const bulk = await icypeas('/bulk-search', {
       name: `md-enrich-${id.slice(0, 8)}-${Date.now()}`,
       task: 'email-search',
       data: input.map(x => [x.firstname, x.lastname, x.domainOrCompany]),
     })
 
-    const batchId = bulk?.item?._id || bulk?._id
-    if (!batchId) return res.status(200).json({ enriched: 0, total: input.length, error: 'Pas de batchId' })
+    const fileId = bulk?.file || bulk?._id
+    if (!fileId) return res.status(200).json({ enriched: 0, total: input.length, error: 'Pas de fileId' })
 
-    // Poll jusqu'à 60s
+    // 2. Poll — max 2 minutes, 4s entre chaque poll (rate limit /bulk-single-searchs/read = 30/min)
     const results = []
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 3000))
-      const poll = await icypeas('/bulk-single-searchs/read', { id: batchId })
+    const seen = new Set()
+    let batchDone = false
 
-      // Collect results
+    for (let i = 0; i < 30 && !batchDone; i++) {
+      await new Promise(r => setTimeout(r, 4000))
+
+      const poll = await icypeas('/bulk-single-searchs/read', {
+        mode: 'bulk',
+        file: fileId,
+        limit: 100,
+      })
+
       const items = Array.isArray(poll?.items) ? poll.items : []
       for (const item of items) {
         if (item.results?.emails?.[0] && item.status !== 'NOT_FOUND') {
-          results.push({
-            order:     item.order ?? 0,
-            email:     item.results.emails[0].email,
-            certainty: item.results.emails[0].certainty,
-          })
+          const key = item._id || item.order
+          if (!seen.has(key)) {
+            seen.add(key)
+            results.push({
+              order:     item.order ?? 0,
+              email:     item.results.emails[0].email,
+              certainty: item.results.emails[0].certainty,
+            })
+          }
         }
       }
 
-      const status = poll?.item?.status || poll?.status || ''
-      if (['DONE', 'PARTIALLY_DONE', 'FAILED'].some(s => status.includes(s))) break
+      // Vérifier si batch terminé
+      try {
+        const fileStatus = await icypeas('/search-files/read', { file: fileId })
+        const status = fileStatus?.items?.[0]?.status || fileStatus?.file?.status || ''
+        if (status === 'done' || status.includes('done') || status.includes('finished')) {
+          batchDone = true
+        }
+      } catch {}
     }
 
     // Update prospects with emails
@@ -105,7 +122,7 @@ export default async function handler(req, res) {
       if (!error) enriched++
     }
 
-    return res.status(200).json({ enriched, total: input.length })
+    return res.status(200).json({ enriched, total: input.length, timedOut: !batchDone })
 
   } catch (e) {
     return res.status(500).json({ error: e.message })
