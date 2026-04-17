@@ -125,7 +125,9 @@ export default function BasePage() {
         const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
         const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
         const nCo       = b.n_companies || 10
-        const perApe    = Math.max(Math.ceil(nCo / Math.max(apeCodes.length, 1)), 5)
+        // On suroffre pour pouvoir filtrer strictement ensuite (l'API n'est pas stricte)
+        const overfetch = 3
+        const perApe    = Math.max(Math.ceil(nCo / Math.max(apeCodes.length, 1)) * overfetch, 25)
 
         const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
         const deptsToSearch = deptCodes.length ? deptCodes : ['']
@@ -148,11 +150,28 @@ export default function BasePage() {
 
         const batches = await Promise.all(sirenePromises)
         const seen = new Set()
+        let rawCompanies = []
         for (const batch of batches) {
           for (const co of batch.results) {
-            if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
+            if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); rawCompanies.push(co) }
           }
         }
+
+        // FILTRAGE STRICT : ne garder que les entreprises dont le SIÈGE est dans un dept demandé
+        // (l'API SIRENE renvoie aussi les entreprises ayant un établissement secondaire dans le dept)
+        if (deptCodes.length) {
+          const before = rawCompanies.length
+          rawCompanies = rawCompanies.filter(co => {
+            const siegeDept = co.siege?.departement || ''
+            return deptCodes.includes(siegeDept)
+          })
+          if (before !== rawCompanies.length) {
+            addLog(`Filtre siège strict: ${rawCompanies.length}/${before} sociétés (sièges en ${deptCodes.join(',')})`, 'i')
+          }
+        }
+
+        // Trim à nCo après filtre strict
+        companies = rawCompanies.slice(0, nCo)
 
         const total = batches.reduce((acc, b) => acc + b.total, 0)
         addLog(`SIRENE: ${companies.length} sociétés récupérées (${total} dispo au total)`, companies.length > 0 ? 's' : 'w')
@@ -171,11 +190,19 @@ export default function BasePage() {
                 .catch(() => [])
             })
           ))
+          const fbSet = new Set(companies.map(c => c.siren))
           for (const batch of fb) {
             for (const co of batch) {
-              if (co.siren && !seen.has(co.siren)) { seen.add(co.siren); companies.push(co) }
+              if (co.siren && !fbSet.has(co.siren)) {
+                // Filtre siège strict
+                const siegeDept = co.siege?.departement || ''
+                if (!deptCodes.length || deptCodes.includes(siegeDept)) {
+                  fbSet.add(co.siren); companies.push(co)
+                }
+              }
             }
           }
+          companies = companies.slice(0, nCo)
           addLog(`Fallback sans taille: ${companies.length} sociétés`, companies.length > 0 ? 's' : 'w')
         }
 
