@@ -14,7 +14,10 @@ const STATUS = {
 
 function BaseCard({ base, onDelete }) {
   const router = useRouter()
-  const s = STATUS[base.status] || STATUS.draft
+  // Badge basé sur le VRAI count de contacts, pas sur status (qui peut être obsolète)
+  const hasContacts = (base.prospects_count || 0) > 0
+  const effectiveStatus = hasContacts ? 'done' : base.status
+  const s = STATUS[effectiveStatus] || STATUS.draft
   const label = base.ape_label || base.client_sector || '—'
   const dept  = base.dept_label || base.client_location || '—'
 
@@ -82,7 +85,7 @@ export default function Dashboard() {
 
   const stats = {
     total:    bases.length,
-    ready:    bases.filter(b => b.status === 'done').length,
+    ready:    bases.filter(b => (b.prospects_count || 0) > 0).length,
     contacts: bases.reduce((a, b) => a + (b.prospects_count || 0), 0),
   }
 

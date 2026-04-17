@@ -5,6 +5,7 @@
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { getSupabaseAdmin } from '../../../../lib/supabaseAdmin'
 import { regionsFromDeptCodes, addressMatchesTerms } from '../../../../lib/france-regions'
+import { countryDisplayNames } from '../../../../lib/country-names'
 
 export const config = { api: { responseLimit: false } }
 
@@ -105,9 +106,19 @@ export default async function handler(req, res) {
       }
       log(`  Géo: ${baseQuery.location.include.join(' · ')}`, 'i')
     } else {
+      // INTERNATIONAL
+      // Icypeas location filter : on passe le code alpha-2 (recommandé par la doc)
       const loc = base.intl_city || base.country_code || 'FR'
       baseQuery.location = { include: [loc] }
-      geoTerms = [loc, base.country_label].filter(Boolean)
+
+      // Post-filter : JAMAIS le code alpha-2 seul (trop générique)
+      // Utiliser les noms du pays dans toutes les langues possibles
+      // LinkedIn retourne l'adresse en langue locale (ex: "Hamburg, Deutschland")
+      geoTerms = []
+      if (base.intl_city) geoTerms.push(base.intl_city)
+      const countryNames = countryDisplayNames(base.country_code)
+      geoTerms.push(...countryNames)
+      log(`  Géo international: ville=${base.intl_city || '—'}, pays=${countryNames.join(' / ')}`, 'i')
     }
 
     // Tentative 1 : ciblage précis

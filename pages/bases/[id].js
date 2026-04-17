@@ -174,6 +174,183 @@ function Progress({ pct, logs }) {
   )
 }
 
+// Modal pour modifier les critères de la base
+function EditBaseModal({ base, supabase, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:          base.name || '',
+    job_titles:    base.job_titles || '',
+    n_companies:   base.n_companies || 10,
+    // France
+    ape_label:     base.ape_label || '',
+    departement:   base.departement || '',
+    dept_label:    base.dept_label || '',
+    effectif_code: base.effectif_code || '',
+    effectif_label: base.effectif_label || '',
+    // International
+    intl_sector:   base.intl_sector || '',
+    intl_city:     base.intl_city || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState(null)
+  const isFR = (base.mode || 'france') !== 'international'
+
+  async function save() {
+    setSaving(true); setError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch(`/api/bases/${base.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const json = await r.json()
+      if (!r.ok) throw new Error(json.error || 'Erreur')
+      onSaved?.()
+      onClose()
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 20,
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white', borderRadius: 'var(--r-lg)', maxWidth: 600, width: '100%',
+        maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+      }} onClick={e => e.stopPropagation()}>
+
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <h2 style={{ fontFamily: 'var(--fd)', fontSize: 17, fontWeight: 700, margin: 0 }}>
+            Modifier les critères
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--t3)', padding: 0 }}>×</button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Nom */}
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Nom de la base
+            </label>
+            <input type="text" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+
+          {/* Postes */}
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Postes cibles <span style={{ fontWeight: 400, color: 'var(--t4)', textTransform: 'none', letterSpacing: 0 }}>(séparés par des virgules)</span>
+            </label>
+            <input type="text" value={form.job_titles}
+              onChange={e => setForm(f => ({ ...f, job_titles: e.target.value }))}
+              placeholder="CEO, Directeur Général, Founder…" />
+          </div>
+
+          {isFR ? (
+            <>
+              {/* FR : secteurs (libellés APE) */}
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Secteurs
+                </label>
+                <input type="text" value={form.ape_label}
+                  onChange={e => setForm(f => ({ ...f, ape_label: e.target.value }))}
+                  placeholder="Agences de publicité, Édition logiciel…" />
+                <div style={{ fontSize: 11, color: 'var(--t4)', marginTop: 4 }}>
+                  ℹ Pour changer le code APE SIRENE, utilisez le wizard (Dashboard → Nouvelle base)
+                </div>
+              </div>
+
+              {/* FR : département */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Code département
+                  </label>
+                  <input type="text" value={form.departement}
+                    onChange={e => setForm(f => ({ ...f, departement: e.target.value }))}
+                    placeholder="35, 29" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Label département
+                  </label>
+                  <input type="text" value={form.dept_label}
+                    onChange={e => setForm(f => ({ ...f, dept_label: e.target.value }))}
+                    placeholder="Ille-et-Vilaine, Finistère" />
+                </div>
+              </div>
+
+              {/* FR : effectifs */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Codes effectif
+                  </label>
+                  <input type="text" value={form.effectif_code}
+                    onChange={e => setForm(f => ({ ...f, effectif_code: e.target.value }))}
+                    placeholder="12, 21, 22" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    Label effectif
+                  </label>
+                  <input type="text" value={form.effectif_label}
+                    onChange={e => setForm(f => ({ ...f, effectif_label: e.target.value }))}
+                    placeholder="10 - 19, 20 - 49" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* INTL : secteur + ville */}
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Secteur international
+                </label>
+                <input type="text" value={form.intl_sector}
+                  onChange={e => setForm(f => ({ ...f, intl_sector: e.target.value }))}
+                  placeholder="Cosmétique & Beauté, Tech & SaaS…" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Ville (optionnel, précise la géo)
+                </label>
+                <input type="text" value={form.intl_city}
+                  onChange={e => setForm(f => ({ ...f, intl_city: e.target.value }))}
+                  placeholder="Berlin, Barcelona, London…" />
+              </div>
+            </>
+          )}
+
+          {/* Nombre de sociétés */}
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--t2)', marginBottom: 5, display: 'block', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Nombre de contacts visé
+            </label>
+            <input type="number" value={form.n_companies} min="1" max="50"
+              onChange={e => setForm(f => ({ ...f, n_companies: parseInt(e.target.value) || 10 }))} />
+          </div>
+
+          {error && <div className="alert alert-error">⚠ {error}</div>}
+        </div>
+
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Enregistrement…</> : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function BasePage() {
   const router   = useRouter()
   const { id }   = router.query
@@ -187,8 +364,7 @@ export default function BasePage() {
   const [logs, setLogs]         = useState([])
   const [enriching, setEnriching] = useState(false)
   const [enrichResult, setEnrichResult] = useState(null)
-  const [scrapingLi, setScrapingLi] = useState(false)
-  const [scrapeResult, setScrapeResult] = useState(null)
+  const [editOpen, setEditOpen] = useState(false)
   const [error, setError]       = useState('')
   const [search, setSearch]     = useState('')
 
@@ -448,21 +624,6 @@ export default function BasePage() {
     setEnriching(false)
   }
 
-  async function scrapeLinkedIn() {
-    setScrapingLi(true); setScrapeResult(null); setError("")
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const r = await fetch(`/api/bases/${id}/scrape-profiles`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session?.access_token}` }
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || "Erreur")
-      setScrapeResult(d)
-      fetchContacts()
-    } catch (e) { setError(e.message) }
-    setScrapingLi(false)
-  }
 
 
   function exportCSV() {
@@ -552,6 +713,9 @@ export default function BasePage() {
                 + {base?.n_companies || 10} contacts supplémentaires
               </button>
             )}
+            <button className="btn btn-secondary" onClick={() => setEditOpen(true)}>
+              ⚙ Modifier les critères
+            </button>
             <div style={{ height:24, width:1, background:'var(--border)' }} />
             <button className="btn btn-secondary" onClick={enrichEmails}
               disabled={enriching || contacts.length === 0}>
@@ -559,20 +723,9 @@ export default function BasePage() {
                 ? <><span className="spinner" style={{ width:14, height:14 }} /> Enrichissement…</>
                 : '✉ Enrichir les emails'}
             </button>
-            <button className="btn btn-secondary" onClick={scrapeLinkedIn}
-              disabled={scrapingLi || contacts.filter(c => c.linkedin_url).length === 0}>
-              {scrapingLi
-                ? <><span className="spinner" style={{ width:14, height:14 }} /> Scraping…</>
-                : '💼 Enrichir LinkedIn'}
-            </button>
             {enrichResult && (
               <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
                 ✓ {enrichResult.enriched}/{enrichResult.total} emails trouvés
-              </span>
-            )}
-            {scrapeResult && (
-              <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
-                ✓ {scrapeResult.enriched}/{scrapeResult.total} profils enrichis
               </span>
             )}
             <div style={{ marginLeft:'auto', fontFamily:'var(--fm)', fontSize:12, color:'var(--t3)' }}>
@@ -661,6 +814,16 @@ export default function BasePage() {
           )
         )}
       </Layout>
+
+      {/* Modal d'édition des critères */}
+      {editOpen && base && (
+        <EditBaseModal
+          base={base}
+          supabase={supabase}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => fetchAll()}
+        />
+      )}
     </>
   )
 }
