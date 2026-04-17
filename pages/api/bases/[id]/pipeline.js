@@ -130,90 +130,12 @@ export default async function handler(req, res) {
 
     log(`✓ ${people.length} contacts trouvés`, 's')
 
-    // ── Email bulk search ──
-    // Doc: /bulk-search pour soumettre, /bulk-single-searchs/read pour récupérer
-    // Rate limit: /bulk-single-searchs/read = 30/min → min 2s entre polls
-    log('↗ Icypeas email enrichment…', 't')
-
-    const emailInput = people
-      .filter(p => p.firstname && p.lastname && (p.lastCompanyWebsite || p.lastCompanyName))
-      .map(p => ({
-        firstname:       p.firstname,
-        lastname:        p.lastname,
-        domainOrCompany: p.lastCompanyWebsite || p.lastCompanyName,
-      }))
-
-    let emailMap = {}
-    if (emailInput.length) {
-      try {
-        // 1. Soumettre le bulk
-        const bulk = await icy('/bulk-search', {
-          name: `md-${id.slice(0,8)}-${Date.now()}`,
-          task: 'email-search',
-          data: emailInput.map(e => [e.firstname, e.lastname, e.domainOrCompany]),
-        })
-        const fileId = bulk?.file || bulk?._id
-        if (!fileId) throw new Error('Pas de fileId retourné par /bulk-search')
-        log(`  Batch soumis (${emailInput.length} emails, fileId ${fileId.slice(0,8)}…)`, 'i')
-
-        // 2. Poll les résultats — max 2 minutes, 4s entre chaque poll (rate limit 30/min)
-        const maxAttempts = 30 // 30 * 4s = 120s
-        let batchDone = false
-
-        for (let i = 0; i < maxAttempts && !batchDone; i++) {
-          await new Promise(r => setTimeout(r, 4000))
-
-          // Récupérer les résultats du batch
-          const poll = await icy('/bulk-single-searchs/read', {
-            mode: 'bulk',
-            file: fileId,
-            limit: 100,
-          })
-
-          const items = Array.isArray(poll?.items) ? poll.items : []
-          for (const item of items) {
-            if (item.results?.emails?.[0]) {
-              const k = `${(item.results.firstname||'').toLowerCase()}_${(item.results.lastname||'').toLowerCase()}`
-              if (!emailMap[k]) {
-                emailMap[k] = {
-                  email:     item.results.emails[0].email,
-                  certainty: item.results.emails[0].certainty,
-                }
-              }
-            }
-          }
-
-          // Vérifier si le batch est terminé via /search-files/read
-          try {
-            const fileStatus = await icy('/search-files/read', { file: fileId })
-            const status = fileStatus?.items?.[0]?.status || fileStatus?.file?.status || ''
-            if (status === 'done' || status.includes('done') || status.includes('finished')) {
-              batchDone = true
-              log(`  Batch terminé après ${(i+1)*4}s — ${Object.keys(emailMap).length} emails trouvés`, 's')
-            }
-          } catch (e) {
-            // Rate limit ou erreur temporaire — continuer
-          }
-        }
-
-        if (!batchDone) {
-          log(`  Timeout 120s — ${Object.keys(emailMap).length} emails récupérés partiels`, 'w')
-        }
-      } catch(e) {
-        log(`⚠ Email enrichment: ${e.message}`, 'w')
-      }
-    }
-
-    const emailCount = Object.keys(emailMap).length
-    log(`✓ ${emailCount}/${people.length} emails trouvés`, 's')
-
-    // ── Sauvegarde ──
-    log('Sauvegarde…', 'i')
+    // ── SAUVEGARDE IMMÉDIATE des contacts (sans emails) ──
+    // Important : on sauvegarde TOUT DE SUITE pour éviter les timeouts Railway
+    log('Sauvegarde des contacts…', 'i')
     const sirenMap = Object.fromEntries(companies.map(c => [(c.nom_raison_sociale||'').toLowerCase(), c]))
 
     const records = people.map(p => {
-      const k  = `${(p.firstname||'').toLowerCase()}_${(p.lastname||'').toLowerCase()}`
-      const em = emailMap[k] || {}
       const co = sirenMap[(p.lastCompanyName||'').toLowerCase()] || {}
       return {
         campaign_id:  id,
@@ -221,8 +143,8 @@ export default async function handler(req, res) {
         fullname:     [p.firstname, p.lastname].filter(Boolean).join(' '),
         job_title:    p.lastJobTitle || p.headline || '',
         company:      p.lastCompanyName || '',
-        email:        em.email || null,
-        email_cert:   em.certainty || null,
+        email:        null,   // enrichi ensuite
+        email_cert:   null,
         linkedin_url: p.profileUrl || null,
         location:     p.address || co.siege?.libelle_commune || null,
         sector:       p.lastCompanyIndustry || base.ape_label || base.intl_sector || '',
@@ -231,11 +153,71 @@ export default async function handler(req, res) {
       }
     })
 
-    const { data: inserted } = await admin.from('prospects').insert(records).select('id')
+    const { data: inserted, error: insertError } = await admin.from('prospects').insert(records).select('id, fullname')
+    if (insertError) {
+      log(`⚠ Erreur sauvegarde: ${insertError.message}`, 'e')
+      return fail(`Sauvegarde échouée: ${insertError.message}`)
+    }
     const count = inserted?.length || 0
-
-    await admin.from('campaigns').update({ status: 'done', generation_pct: 100, prospects_count: count }).eq('id', id)
+    await admin.from('campaigns').update({ status: 'done', generation_pct: 90, prospects_count: count }).eq('id', id)
     log(`✓ ${count} contacts sauvegardés`, 's')
+
+    // ── Email bulk search — timeout court pour éviter Railway timeout ──
+    log('↗ Icypeas email enrichment (25s max)…', 't')
+
+    const emailInput = people
+      .filter(p => p.firstname && p.lastname && (p.lastCompanyWebsite || p.lastCompanyName))
+      .map((p, idx) => ({
+        firstname:       p.firstname,
+        lastname:        p.lastname,
+        domainOrCompany: p.lastCompanyWebsite || p.lastCompanyName,
+        idx,
+      }))
+
+    if (emailInput.length) {
+      try {
+        // Soumettre le bulk — rapide (< 2s)
+        const bulk = await icy('/bulk-search', {
+          name: `md-${id.slice(0,8)}-${Date.now()}`,
+          task: 'email-search',
+          data: emailInput.map(e => [e.firstname, e.lastname, e.domainOrCompany]),
+        })
+        const fileId = bulk?.file || bulk?._id
+        if (!fileId) throw new Error('Pas de fileId')
+        log(`  Batch ${fileId.slice(0,8)}… soumis`, 'i')
+
+        // Poll seulement 5 fois × 4s = 20s max (Railway timeout = 30-60s)
+        let emailCount = 0
+        for (let i = 0; i < 5; i++) {
+          await new Promise(r => setTimeout(r, 4000))
+
+          const poll = await icy('/bulk-single-searchs/read', {
+            mode: 'bulk', file: fileId, limit: 100,
+          })
+
+          const items = Array.isArray(poll?.items) ? poll.items : []
+          // Update chaque prospect avec son email dès qu'il arrive
+          for (const item of items) {
+            if (item.results?.emails?.[0] && typeof item.order === 'number') {
+              const prospect = inserted[item.order]
+              if (prospect) {
+                await admin.from('prospects').update({
+                  email:      item.results.emails[0].email,
+                  email_cert: item.results.emails[0].certainty,
+                }).eq('id', prospect.id)
+                emailCount++
+              }
+            }
+          }
+        }
+
+        log(`✓ ${emailCount} emails enrichis`, 's')
+      } catch(e) {
+        log(`⚠ Email enrichment incomplet: ${e.message}`, 'w')
+      }
+    }
+
+    await admin.from('campaigns').update({ status: 'done', generation_pct: 100 }).eq('id', id)
     done({ count })
 
   } catch (err) {
