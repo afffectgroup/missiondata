@@ -437,9 +437,12 @@ export default function BasePage() {
         const deptCodes = (b.departement || '').split(',').map(s => s.trim()).filter(Boolean)
         const effCodes  = (b.effectif_code || '').split(',').map(s => s.trim()).filter(Boolean)
         const nCo       = b.n_companies || 10
-        // On suroffre pour pouvoir filtrer strictement ensuite (l'API n'est pas stricte)
-        const overfetch = 3
-        const perApe    = Math.max(Math.ceil(nCo / Math.max(apeCodes.length, 1)) * overfetch, 25)
+        // Overfetch AGRESSIF : l'API SIRENE filtre mal par département
+        // (inclut les entreprises avec établissement secondaire dans le dept)
+        // Observé : ~68% des résultats ont un siège hors zone. Donc pour garantir nCo sièges valides,
+        // on demande nCo * ~8 pour avoir une marge de sécurité confortable
+        const OVERFETCH = deptCodes.length ? 10 : 3
+        const perApe    = Math.min(Math.max(Math.ceil(nCo / Math.max(apeCodes.length, 1)) * OVERFETCH, 50), 100)
 
         const apesToSearch  = apeCodes.length  ? apeCodes  : ['']
         const deptsToSearch = deptCodes.length ? deptCodes : ['']
@@ -473,7 +476,6 @@ export default function BasePage() {
         }
 
         // FILTRAGE STRICT : ne garder que les entreprises dont le SIÈGE est dans un dept demandé
-        // (l'API SIRENE renvoie aussi les entreprises ayant un établissement secondaire dans le dept)
         if (deptCodes.length) {
           const before = rawCompanies.length
           rawCompanies = rawCompanies.filter(co => {
@@ -489,7 +491,7 @@ export default function BasePage() {
         companies = rawCompanies.slice(0, nCo)
 
         const total = batches.reduce((acc, b) => acc + b.total, 0)
-        addLog(`SIRENE: ${companies.length} sociétés récupérées (${total} dispo au total)`, companies.length > 0 ? 's' : 'w')
+        addLog(`SIRENE: ${companies.length}/${nCo} demandées (${total} matches total, ${rawCompanies.length} sièges valides)`, companies.length >= nCo ? 's' : 'w')
 
         // Fallback sans effectif
         if (!companies.length && effCodes.length) {

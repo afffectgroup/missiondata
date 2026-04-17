@@ -167,11 +167,13 @@ export default async function handler(req, res) {
     }
 
     // Tentative 2 : élargir (France seulement — passe du filtre entreprise au keyword secteur)
-    if (people.length < 3 && isFR && companies.length > 0) {
+    // En mode delta, on déclenche T2 dès qu'on a moins que nCo résultats (au lieu de < 3)
+    const t2Threshold = isDeltaMode ? nCo : 3
+    if (people.length < t2Threshold && isFR && companies.length > 0) {
       // Utiliser TOUS les libellés APE (l'user peut en avoir coché 6)
       const kws = (base.ape_label || '').split(',').map(s => s.trim()).filter(Boolean)
       if (kws.length) {
-        log(`  Tentative 2 — keywords [${kws.join(', ')}] + postes`, 'i')
+        log(`  Tentative 2 — keywords [${kws.join(', ')}] + postes (seuil: ${t2Threshold})`, 'i')
         try {
           const moreResults = await findPeople({ ...baseQuery, keyword: { include: kws } }, icyPageSize)
           // Merge et dédupe par profileUrl
@@ -194,7 +196,8 @@ export default async function handler(req, res) {
     // Sinon on retournerait des contacts random (mauvais secteur OU mauvaise géo)
     const hasGeoFilter = isFR ? deptCodes.length > 0 : !!base.intl_city
     const hasSectorFilter = isFR ? !!base.ape_code : !!base.intl_sector
-    if (people.length < 3 && !hasGeoFilter && !hasSectorFilter) {
+    const t3Threshold = isDeltaMode ? Math.max(nCo * 2, 5) : 3
+    if (people.length < t3Threshold && !hasGeoFilter && !hasSectorFilter) {
       log(`  Tentative 3 — postes + location seulement`, 'i')
       try {
         const moreResults = await findPeople(baseQuery, icyPageSize)
