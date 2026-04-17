@@ -25,6 +25,71 @@ export default async function handler(req, res) {
     })
   }
 
+  // Mode pipeline : reproduit exactement la Tentative 1 + 2 + 3 du pipeline
+  // Pour les agences pub Paris / DG-CEO
+  if (mode === 'pipeline') {
+    const calls = []
+
+    // Tentative 1 : avec entreprises + postes
+    const q1 = {
+      query: {
+        currentJobTitle: { include: ['Directeur Général', 'CEO'] },
+        currentCompanyName: { include: ['Publicis', 'Havas', 'BETC', 'Marcel', 'Fred & Farid'] },
+        location: { include: ['FR'] },
+      },
+      pagination: { size: 10 },
+    }
+    calls.push({ name: 'T1 companies+titles', body: q1 })
+
+    // Tentative 2 : avec keyword secteur
+    const q2 = {
+      query: {
+        currentJobTitle: { include: ['Directeur Général', 'CEO'] },
+        keyword: { include: ['Agences de publicité'] },
+        location: { include: ['FR'] },
+      },
+      pagination: { size: 10 },
+    }
+    calls.push({ name: 'T2 keyword+titles', body: q2 })
+
+    // Tentative 3 : postes + location seul
+    const q3 = {
+      query: {
+        currentJobTitle: { include: ['Directeur Général', 'CEO'] },
+        location: { include: ['FR'] },
+      },
+      pagination: { size: 10 },
+    }
+    calls.push({ name: 'T3 titles+FR', body: q3 })
+
+    const results = []
+    for (const c of calls) {
+      try {
+        const r = await fetch('https://app.icypeas.com/api/find-people', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: process.env.ICYPEAS_API_KEY },
+          body: JSON.stringify(c.body),
+        })
+        const text = await r.text()
+        let parsed = null
+        try { parsed = JSON.parse(text) } catch {}
+        results.push({
+          name:        c.name,
+          status:      r.status,
+          total:       parsed?.total,
+          leadsCount:  parsed?.leads?.length || 0,
+          firstLead:   parsed?.leads?.[0] ? `${parsed.leads[0].firstname} ${parsed.leads[0].lastname} @ ${parsed.leads[0].lastCompanyName}` : null,
+          bodyPreview: !parsed ? text.slice(0, 300) : null,
+          requestBody: c.body,
+        })
+      } catch (e) {
+        results.push({ name: c.name, error: e.message })
+      }
+    }
+
+    return res.status(200).json({ results })
+  }
+
   const url = mode === 'count'
     ? 'https://app.icypeas.com/api/find-people/count'
     : 'https://app.icypeas.com/api/find-people'
