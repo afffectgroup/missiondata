@@ -143,14 +143,25 @@ export default async function handler(req, res) {
         fullname:     [p.firstname, p.lastname].filter(Boolean).join(' '),
         job_title:    p.lastJobTitle || p.headline || '',
         company:      p.lastCompanyName || '',
-        email:        null,   // enrichi ensuite
+        email:        null,
         email_cert:   null,
         linkedin_url: p.profileUrl || null,
         location:     p.address || co.siege?.libelle_commune || null,
         sector:       p.lastCompanyIndustry || base.ape_label || base.intl_sector || '',
         source:       'icypeas',
-        raw_data:     JSON.stringify({ website: p.lastCompanyWebsite||'', company: p.lastCompanyName||'' }),
+        // Site web stocké pour l'enrichissement email ultérieur
+        raw_data: {
+          website: p.lastCompanyWebsite || '',
+          company: p.lastCompanyName    || '',
+        },
       }
+    })
+
+    // Map firstname+lastname → website pour l'enrichissement email ensuite
+    const websiteMap = {}
+    people.forEach(p => {
+      const k = `${(p.firstname||'').toLowerCase()}_${(p.lastname||'').toLowerCase()}`
+      websiteMap[k] = p.lastCompanyWebsite || p.lastCompanyName || ''
     })
 
     const { data: inserted, error: insertError } = await admin.from('prospects').insert(records).select('id, fullname')
