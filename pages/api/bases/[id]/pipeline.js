@@ -53,9 +53,14 @@ export default async function handler(req, res) {
     const isFR   = (base.mode || 'france') !== 'international'
     const titles = (base.job_titles || base.client_need || '').split(',').map(s => s.trim()).filter(Boolean)
     const nCo    = base.n_companies || 10
+    const deptCodes = (base.departement || '').split(',').map(s => s.trim()).filter(Boolean)
+    // IMPORTANT : on demande beaucoup plus de contacts que de sociétés
+    // Plusieurs contacts par entreprise + marge de sécurité
+    const icyPageSize = Math.max(nCo * 3, 30)
 
     // ── Icypeas find-people avec fallbacks robustes ──
     log('↗ Icypeas find-people…', 't')
+    log(`  Demande: ${icyPageSize} contacts max, postes: ${titles.join(', ')}`, 'i')
 
     const titlesList = titles
     let people = []
@@ -65,13 +70,23 @@ export default async function handler(req, res) {
       const body = { query, pagination: { size } }
       const res  = await icy('/find-people', body)
       // Format de réponse Icypeas : { success, total, leads: [...] }
+      log(`    Icypeas total disponible: ${res?.total || 0}, retournés: ${res?.leads?.length || 0}`, 'i')
       return res.leads || []
     }
 
-    // Build base query
+    // Build base query avec géographie précise — CRITIQUE : on garde la géo dans TOUTES les tentatives
     const baseQuery = { currentJobTitle: { include: titlesList } }
     if (isFR) {
-      baseQuery.location = { include: ['FR'] }
+      // France : on ajoute les noms de départements/régions au filtre location
+      // Icypeas fait du fuzzy match sur "Ille-et-Vilaine", "Rennes, France", etc.
+      const locationTerms = ['FR']
+      if (base.dept_label) {
+        // dept_label peut contenir plusieurs noms séparés par ", " (si multi-dept)
+        const depts = base.dept_label.split(',').map(s => s.trim()).filter(Boolean)
+        locationTerms.push(...depts)
+      }
+      baseQuery.location = { include: locationTerms }
+      log(`  Géo: ${locationTerms.join(' · ')}`, 'i')
     } else {
       const loc = base.intl_city || base.country_code || 'FR'
       baseQuery.location = { include: [loc] }
@@ -92,20 +107,28 @@ export default async function handler(req, res) {
     }
 
     try {
-      people = await findPeople(query1, nCo)
-      log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+      people = await findPeople(query1, icyPageSize)
+      log(`  → ${people.length} résultats T1`, people.length ? 's' : 'w')
     } catch (e) {
       log(`  ⚠ Tentative 1 échouée : ${e.message}`, 'w')
     }
 
     // Tentative 2 : élargir avec keyword secteur
-    if (!people.length && isFR && companies.length > 0) {
+    if (people.length < 3 && isFR && companies.length > 0) {
       const kw = base.ape_label || (base.ape_code || '').split(',')[0]?.trim()
       if (kw) {
-        log(`  Tentative 2 — sans filtre entreprise, keyword "${kw}"`, 'i')
+        log(`  Tentative 2 — keyword "${kw}" + postes`, 'i')
         try {
-          people = await findPeople({ ...baseQuery, keyword: { include: [kw] } }, nCo)
-          log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+          const moreResults = await findPeople({ ...baseQuery, keyword: { include: [kw] } }, icyPageSize)
+          // Merge et dédupe par profileUrl
+          const existingUrls = new Set(people.map(p => p.profileUrl).filter(Boolean))
+          for (const p of moreResults) {
+            if (!existingUrls.has(p.profileUrl)) {
+              people.push(p)
+              existingUrls.add(p.profileUrl)
+            }
+          }
+          log(`  → ${people.length} résultats cumulés`, people.length ? 's' : 'w')
         } catch (e) {
           log(`  ⚠ Tentative 2 échouée : ${e.message}`, 'w')
         }
@@ -113,14 +136,26 @@ export default async function handler(req, res) {
     }
 
     // Tentative 3 : postes + location seulement
-    if (!people.length) {
+    // ⚠ Ne déclencher QUE si l'user n'a PAS spécifié de filtre géographique précis
+    // Sinon on retournerait des contacts de n'importe où en France
+    const hasGeoFilter = isFR ? deptCodes.length > 0 : !!base.intl_city
+    if (people.length < 3 && !hasGeoFilter) {
       log(`  Tentative 3 — postes + location seulement`, 'i')
       try {
-        people = await findPeople(baseQuery, nCo)
-        log(`  → ${people.length} résultats`, people.length ? 's' : 'w')
+        const moreResults = await findPeople(baseQuery, icyPageSize)
+        const existingUrls = new Set(people.map(p => p.profileUrl).filter(Boolean))
+        for (const p of moreResults) {
+          if (!existingUrls.has(p.profileUrl)) {
+            people.push(p)
+            existingUrls.add(p.profileUrl)
+          }
+        }
+        log(`  → ${people.length} résultats cumulés`, people.length ? 's' : 'w')
       } catch (e) {
         log(`  ⚠ Tentative 3 échouée : ${e.message}`, 'w')
       }
+    } else if (people.length < 3 && hasGeoFilter) {
+      log(`  ℹ Peu de résultats, mais filtre géo strict maintenu (${base.dept_label || base.intl_city})`, 'i')
     }
 
     if (!people.length) {
@@ -128,7 +163,7 @@ export default async function handler(req, res) {
       return fail('Aucun contact trouvé après 3 tentatives. Essayez : postes plus génériques (CEO au lieu de Directeur Général), secteur plus large, ou une autre localisation.')
     }
 
-    log(`✓ ${people.length} contacts trouvés`, 's')
+    log(`✓ ${people.length} contacts trouvés (après dédup)`, 's')
 
     // ── SAUVEGARDE IMMÉDIATE des contacts (sans emails) ──
     // Important : on sauvegarde TOUT DE SUITE pour éviter les timeouts Railway
@@ -164,12 +199,17 @@ export default async function handler(req, res) {
       websiteMap[k] = p.lastCompanyWebsite || p.lastCompanyName || ''
     })
 
+    log(`Préparation de ${records.length} records pour Supabase…`, 'i')
     const { data: inserted, error: insertError } = await admin.from('prospects').insert(records).select('id, fullname')
     if (insertError) {
       log(`⚠ Erreur sauvegarde: ${insertError.message}`, 'e')
+      log(`  Détails: ${JSON.stringify(insertError).slice(0, 200)}`, 'e')
       return fail(`Sauvegarde échouée: ${insertError.message}`)
     }
     const count = inserted?.length || 0
+    if (count < records.length) {
+      log(`⚠ Seulement ${count}/${records.length} contacts insérés (contrainte unique ?)`, 'w')
+    }
     await admin.from('campaigns').update({ status: 'done', generation_pct: 90, prospects_count: count }).eq('id', id)
     log(`✓ ${count} contacts sauvegardés`, 's')
 
