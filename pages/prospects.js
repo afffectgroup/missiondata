@@ -24,7 +24,7 @@ export default function ProspectsPage() {
   const [campFilter, setCampFilter] = useState('all')
 
   useEffect(() => {
-    if (user === null) router.push('/')
+    if (user === null) router.push('/login')
   }, [user])
 
   useEffect(() => {

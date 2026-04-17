@@ -129,7 +129,7 @@ export default function SequencesPage() {
   const [campFilter, setCampFilter] = useState('all')
 
   useEffect(() => {
-    if (user === null) router.push('/')
+    if (user === null) router.push('/login')
   }, [user])
 
   useEffect(() => {

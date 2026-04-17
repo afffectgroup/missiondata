@@ -65,7 +65,7 @@ export default function Dashboard() {
   const [bases, setBases]     = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { if (!authLoading && !user) router.push('/') }, [user, authLoading])
+  useEffect(() => { if (!authLoading && !user) router.push('/login') }, [user, authLoading])
   useEffect(() => { if (user) fetchBases() }, [user])
 
   async function fetchBases() {

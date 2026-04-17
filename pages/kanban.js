@@ -150,7 +150,7 @@ export default function KanbanPage() {
   const [loading, setLoading] = useState(true)
   const [dragId, setDragId] = useState(null)
 
-  useEffect(() => { if (user === null) router.push('/') }, [user])
+  useEffect(() => { if (user === null) router.push('/login') }, [user])
 
   useEffect(() => {
     if (!user) return

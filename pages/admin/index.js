@@ -108,7 +108,7 @@ export default function AdminPage() {
 
   /* ── Auth guard ── */
   useEffect(() => {
-    if (!loading && (!profile || profile.role !== 'admin')) router.push('/')
+    if (!loading && (!profile || profile.role !== 'admin')) router.push('/login')
   }, [loading, profile])
 
   useEffect(() => {

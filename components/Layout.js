@@ -3,10 +3,8 @@ import Link from 'next/link'
 import { useAuth } from '../pages/_app'
 
 const NAV = [
-  { href: '/dashboard', label: 'Mes bases' },
-  { href: '/contacts',  label: 'Contacts' },
-  { href: '/export',    label: 'Exports',  soon: true },
-  { href: '/stats',     label: 'Stats',    soon: true },
+  { href: '/dashboard',     label: 'Mes bases' },
+  { href: '/trouver-email', label: 'Trouver un email' },
 ]
 
 export default function Layout({ children, title, action }) {
@@ -32,16 +30,22 @@ export default function Layout({ children, title, action }) {
               {/* Icône Mission Data */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                 <div style={{
-                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                  background: 'var(--brand-grad)',
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  overflow: 'hidden',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  {/* Icône "data bars" en SVG — évoque les données */}
-                  <svg width="16" height="14" viewBox="0 0 16 14" fill="none">
-                    <rect x="0" y="6" width="3.5" height="8" rx="1" fill="rgba(255,255,255,.9)"/>
-                    <rect x="4.5" y="3" width="3.5" height="11" rx="1" fill="white"/>
-                    <rect x="9" y="0" width="3.5" height="14" rx="1" fill="white"/>
-                    <rect x="13.5" y="4" width="2.5" height="10" rx="1" fill="rgba(255,255,255,.7)"/>
+                  {/* Nouveau logo Mission Data — 3 vagues blanches sur fond teal gradient */}
+                  <svg width="36" height="36" viewBox="0 0 1511 1511" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1322.12 0H188.875C84.5622 0 0 84.5622 0 188.875V1322.12C0 1426.44 84.5622 1511 188.875 1511H1322.12C1426.44 1511 1511 1426.44 1511 1322.12V188.875C1511 84.5622 1426.44 0 1322.12 0Z" fill="url(#md_grad)"/>
+                    <path d="M619.753 668.958C728.81 616.859 814.158 528.45 863.155 417.937C831.544 384.784 790.45 361.102 746.195 346.894L722.487 339C720.907 342.157 719.326 346.894 719.326 350.051C681.394 457.406 603.948 544.237 499.633 593.178C426.929 627.911 373.191 691.061 347.903 766.841L340 790.522C343.161 792.101 347.903 793.679 351.064 793.679C381.094 804.73 411.124 818.939 439.573 836.305C479.086 765.262 542.307 705.269 619.753 668.958Z" fill="white"/>
+                    <path d="M1078.12 675.273C1019.64 763.683 939.032 834.727 839.459 882.089C758.852 919.979 697.211 991.023 668.762 1076.28L660.859 1103.11C690.889 1129.95 727.241 1150.48 766.755 1163.11L790.463 1171C792.043 1167.84 793.624 1163.11 793.624 1159.95C831.556 1052.59 909.002 965.763 1013.32 916.822C1086.02 882.089 1141.34 818.939 1165.05 743.159L1172.95 719.478C1139.76 710.006 1108.15 694.218 1078.12 675.273Z" fill="white"/>
+                    <path d="M597.627 1021.02C637.14 926.294 709.844 848.935 803.095 804.73C888.444 763.683 959.567 700.533 1008.56 623.175C972.212 588.442 942.181 548.973 920.054 501.611C861.575 608.966 769.904 695.797 657.687 749.474C592.885 779.471 540.728 831.569 509.117 894.719C543.889 927.873 572.338 968.92 594.466 1014.7C594.466 1014.7 596.046 1017.86 597.627 1021.02Z" fill="white"/>
+                    <defs>
+                      <linearGradient id="md_grad" x1="755.5" y1="0" x2="774.5" y2="2045.5" gradientUnits="userSpaceOnUse">
+                        <stop offset="0.294589" stopColor="#1C4451"/>
+                        <stop offset="1" stopColor="#2A6678"/>
+                      </linearGradient>
+                    </defs>
                   </svg>
                 </div>
                 <div>
@@ -144,7 +148,7 @@ export default function Layout({ children, title, action }) {
               </div>
             </div>
           </div>
-          <button onClick={() => signOut().then(() => router.push('/'))}
+          <button onClick={() => signOut().then(() => router.push('/login'))}
             style={{ width: '100%', padding: '7px 12px', borderRadius: 'var(--r-md)', fontSize: 12, color: 'rgba(255,255,255,.55)', background: 'transparent', border: '1px solid rgba(255,255,255,.14)', fontFamily: 'var(--fb)', cursor: 'pointer', transition: 'all .14s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.25)'; e.currentTarget.style.color = 'rgba(255,255,255,.75)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = 'rgba(255,255,255,.55)' }}>

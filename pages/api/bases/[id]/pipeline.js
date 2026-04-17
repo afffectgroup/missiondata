@@ -30,7 +30,9 @@ export default async function handler(req, res) {
 
   const { id } = req.query
   // companies = tableau des sociétés SIRENE envoyées par le client (peut être vide)
-  const { companies = [] } = req.body || {}
+  // excludeProfileUrls = liste des profileUrl déjà en base (mode "+10 contacts")
+  const { companies = [], excludeProfileUrls = [] } = req.body || {}
+  const isDeltaMode = excludeProfileUrls.length > 0
 
   const admin = getSupabaseAdmin()
   const { data: base } = await admin.from('campaigns').select('*').eq('id', id).single()
@@ -48,7 +50,12 @@ export default async function handler(req, res) {
   const fail = (msg)  => { send('error', { msg }); res.end() }
 
   await admin.from('campaigns').update({ status: 'generating', generation_pct: 0 }).eq('id', id)
-  await admin.from('prospects').delete().eq('campaign_id', id)
+  // En mode delta, on GARDE les prospects existants. Sinon on delete tout.
+  if (!isDeltaMode) {
+    await admin.from('prospects').delete().eq('campaign_id', id)
+  } else {
+    log(`Mode delta : on garde les ${excludeProfileUrls.length} contacts existants`, 'i')
+  }
 
   try {
     const isFR   = (base.mode || 'france') !== 'international'
@@ -203,6 +210,26 @@ export default async function handler(req, res) {
       return fail('Aucun contact trouvé après 3 tentatives. Essayez : postes plus génériques (CEO au lieu de Directeur Général), secteur plus large, ou une autre localisation.')
     }
 
+    // ── FILTRE MODE DELTA : exclure les profileUrl déjà en base ──
+    if (isDeltaMode) {
+      const excludeSet = new Set(excludeProfileUrls)
+      const beforeDelta = people.length
+      people = people.filter(p => p.profileUrl && !excludeSet.has(p.profileUrl))
+      if (beforeDelta !== people.length) {
+        log(`  Filtre delta: ${people.length}/${beforeDelta} nouveaux contacts (${beforeDelta - people.length} déjà en base)`, 'i')
+      }
+    }
+
+    if (!people.length) {
+      await admin.from('campaigns').update({ status: 'done', generation_pct: 100 }).eq('id', id)
+      return fail('Pas de nouveau contact — tous les résultats Icypeas sont déjà dans cette base.')
+    }
+
+    // Limiter au nombre demandé (nCo) en mode delta
+    if (isDeltaMode) {
+      people = people.slice(0, nCo)
+    }
+
     // ── POST-FILTER GÉOGRAPHIQUE STRICT ──
     // Icypeas fait du fuzzy match sur location et peut retourner des profils hors zone.
     // On vérifie que l'adresse contient AU MOINS UN des termes géographiques demandés.
@@ -266,8 +293,14 @@ export default async function handler(req, res) {
     if (count < records.length) {
       log(`⚠ Seulement ${count}/${records.length} contacts insérés (contrainte unique ?)`, 'w')
     }
-    await admin.from('campaigns').update({ status: 'done', generation_pct: 90, prospects_count: count }).eq('id', id)
-    log(`✓ ${count} contacts sauvegardés`, 's')
+
+    // En mode delta : ajouter au total existant. Sinon : remplacer.
+    const totalCount = isDeltaMode
+      ? (await admin.from('prospects').select('id', { count: 'exact', head: true }).eq('campaign_id', id)).count || count
+      : count
+
+    await admin.from('campaigns').update({ status: 'done', generation_pct: 90, prospects_count: totalCount }).eq('id', id)
+    log(`✓ ${count} nouveaux contacts sauvegardés (total: ${totalCount})`, 's')
 
     // ── Email bulk search — timeout court pour éviter Railway timeout ──
     log('↗ Icypeas email enrichment (25s max)…', 't')

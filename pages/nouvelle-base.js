@@ -5,6 +5,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import Layout from '../components/Layout'
 import { useAuth } from './_app'
+import { JOB_TITLE_FAMILIES, detectFamiliesFromTitles, suggestTitles } from '../lib/job-title-families'
 
 /* ── Données INSEE / Datagouv ── */
 const DEPTS_RAW = [
@@ -566,6 +567,70 @@ export default function NouvelleBase() {
                 {form.jobTitles.split(',').filter(Boolean).length} titre{form.jobTitles.split(',').filter(Boolean).length > 1 ? 's' : ''} · {form.jobTitles.split(',').filter(Boolean).map(s => s.trim()).join(' · ')}
               </div>
             )}
+
+            {/* Expansion automatique des titres de poste */}
+            {(() => {
+              const currentTitles = form.jobTitles.split(',').map(s => s.trim()).filter(Boolean)
+              if (currentTitles.length === 0) return null
+              const families = detectFamiliesFromTitles(currentTitles)
+              if (families.length === 0) return null
+
+              return (
+                <div style={{ marginTop:14, padding:'10px 14px', background:'var(--bg2-data)', borderRadius:'var(--r-md)', border:'1px dashed var(--border)' }}>
+                  <div style={{ fontSize:11, color:'var(--t3)', marginBottom:8, fontFamily:'var(--fm)', letterSpacing:'0.05em', textTransform:'uppercase' }}>
+                    💡 Suggestions — ajoutez des synonymes pour augmenter le nombre de contacts trouvés
+                  </div>
+                  {families.map(famKey => {
+                    const fam = JOB_TITLE_FAMILIES[famKey]
+                    const suggestions = suggestTitles(currentTitles, famKey, 6)
+                    if (suggestions.length === 0) return null
+                    return (
+                      <div key={famKey} style={{ marginBottom:8 }}>
+                        <div style={{ fontSize:11, color:'var(--t2)', marginBottom:6 }}>
+                          {fam.emoji} <strong>{fam.label}</strong>
+                        </div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                          {suggestions.map(title => (
+                            <button key={title} onClick={() => {
+                              const newTitles = [...currentTitles, title].join(', ')
+                              setForm(f => ({ ...f, jobTitles: newTitles }))
+                            }} style={{
+                              padding:'4px 10px', borderRadius:16, fontSize:11.5,
+                              border:'1px solid var(--border)', background:'var(--white)',
+                              color:'var(--t2)', cursor:'pointer', transition:'all .12s',
+                            }}
+                            onMouseEnter={e => { e.target.style.borderColor = 'var(--brand)'; e.target.style.color = 'var(--brand)' }}
+                            onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = 'var(--t2)' }}>
+                              + {title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {/* Bouton ajouter toute la famille */}
+                  <div style={{ marginTop:10, borderTop:'1px solid var(--border)', paddingTop:8, display:'flex', gap:6 }}>
+                    {families.map(famKey => {
+                      const fam = JOB_TITLE_FAMILIES[famKey]
+                      const suggestions = suggestTitles(currentTitles, famKey, 20)
+                      if (suggestions.length === 0) return null
+                      return (
+                        <button key={famKey} onClick={() => {
+                          const newTitles = [...currentTitles, ...suggestions].join(', ')
+                          setForm(f => ({ ...f, jobTitles: newTitles }))
+                        }} style={{
+                          padding:'4px 10px', borderRadius:12, fontSize:11,
+                          border:'1px solid var(--brand)', background:'var(--bg2-data)',
+                          color:'var(--brand-mid)', cursor:'pointer', fontWeight:500,
+                        }}>
+                          + Toute la famille {fam.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Récap */}

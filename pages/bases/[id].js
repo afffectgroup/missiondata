@@ -15,6 +15,139 @@ const CERT = {
 }
 const LOG_C = { i:'#7DD3FC', s:'#86EFAC', e:'#FCA5A5', t:'#C4B5FD', w:'#FCD34D' }
 
+// Preview count widget — interroge Icypeas sans consommer de crédits
+function PreviewCount({ base, supabase }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!base?.id) return
+    let cancelled = false
+    setLoading(true)
+
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const r = await fetch('/api/icypeas/count', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode:          base.mode,
+            job_titles:    base.job_titles,
+            dept_code:     base.departement,
+            dept_label:    base.dept_label,
+            ape_label:     base.ape_label,
+            country_code:  base.country_code,
+            country_label: base.country_label,
+            intl_sector:   base.intl_sector,
+            intl_city:     base.intl_city,
+          }),
+        })
+        const json = await r.json()
+        if (!cancelled) setData(json)
+      } catch (e) {
+        if (!cancelled) setData({ error: e.message })
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [base?.id])
+
+  if (!data && !loading) return null
+
+  const strict = data?.strict || 0
+  const max    = data?.max    || 0
+
+  // Couleur du card selon la qualité de l'estimation
+  let quality = 'good'
+  if (strict === 0) quality = 'bad'
+  else if (strict < 10) quality = 'warn'
+
+  const colors = {
+    good: { bg:'var(--green-bg)',  border:'var(--green)', text:'var(--green)' },
+    warn: { bg:'var(--amber-bg)',  border:'var(--amber)', text:'var(--amber)' },
+    bad:  { bg:'#FEE2E2',          border:'#DC2626',      text:'#DC2626'      },
+  }[quality]
+
+  return (
+    <div style={{
+      marginBottom:16, padding:'14px 18px',
+      background:colors.bg, borderLeft:`3px solid ${colors.border}`,
+      borderRadius:'var(--r-lg)',
+    }}>
+      <div style={{ display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
+        <div>
+          <div style={{ fontFamily:'var(--fm)', fontSize:10, color:'var(--t3)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:3 }}>
+            Estimation Icypeas
+          </div>
+          <div style={{ fontSize:22, fontWeight:700, color:colors.text, lineHeight:1 }}>
+            {loading ? <span style={{ opacity:0.5 }}>…</span> : strict.toLocaleString('fr-FR')}
+            <span style={{ fontSize:13, fontWeight:400, color:'var(--t3)', marginLeft:6 }}>
+              contact{strict > 1 ? 's' : ''} disponible{strict > 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+
+        {!loading && data && (
+          <div style={{ display:'flex', gap:14, marginLeft:'auto', fontSize:12 }}>
+            {data.noSector > strict && (
+              <div style={{ color:'var(--t3)' }}>
+                Sans secteur: <strong style={{ color:'var(--t1)' }}>{data.noSector.toLocaleString('fr-FR')}</strong>
+              </div>
+            )}
+            {data.noGeo > strict && (
+              <div style={{ color:'var(--t3)' }}>
+                Sans géo: <strong style={{ color:'var(--t1)' }}>{data.noGeo.toLocaleString('fr-FR')}</strong>
+              </div>
+            )}
+            <div style={{ color:'var(--t3)' }}>
+              Max (postes seuls): <strong style={{ color:'var(--t1)' }}>{max.toLocaleString('fr-FR')}</strong>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!loading && quality !== 'good' && (
+        <div style={{ marginTop:10, fontSize:12, color:colors.text, lineHeight:1.5 }}>
+          {quality === 'bad' && <strong>⚠ Aucun contact avec ces critères exacts.</strong>}
+          {quality === 'warn' && <strong>⚠ Peu de résultats disponibles.</strong>}
+          <div style={{ marginTop:4 }}>
+            {(() => {
+              const suggestions = []
+              // Sector filter too strict
+              if (data.noSector > strict * 3 && data.noSector > 20) {
+                suggestions.push(`Le filtre secteur divise par ${Math.round(data.noSector / Math.max(strict, 1))} → essayez de le retirer ou d'en choisir plus`)
+              }
+              // Geo filter too strict
+              if (data.noGeo > strict * 3 && data.noGeo > 20) {
+                suggestions.push(`Le filtre géo divise par ${Math.round(data.noGeo / Math.max(strict, 1))} → essayez d'ajouter des départements voisins`)
+              }
+              // Both filters combined are the problem
+              if (data.max > 500 && strict < 10) {
+                suggestions.push(`Avec les postes seuls il y a ${data.max.toLocaleString('fr-FR')} contacts — vos filtres combinés sont trop restrictifs`)
+              }
+              // Small Icypeas coverage in that country/zone
+              if (data.max < 100) {
+                suggestions.push('Icypeas indexe surtout les grandes structures — pour des petites entreprises en province, essayez des titres plus larges (ex: "Gérant, Président, Associé" au lieu de "CEO")')
+              }
+              // No specific suggestion but low count
+              if (suggestions.length === 0 && quality === 'warn') {
+                suggestions.push('Essayez des postes plus génériques ou élargissez la zone géographique')
+              }
+              return suggestions.map((s, i) => (
+                <div key={i} style={{ marginTop:3 }}>→ {s}</div>
+              ))
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 function Progress({ pct, logs }) {
   const ref = useRef(null)
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight }, [logs])
@@ -54,10 +187,12 @@ export default function BasePage() {
   const [logs, setLogs]         = useState([])
   const [enriching, setEnriching] = useState(false)
   const [enrichResult, setEnrichResult] = useState(null)
+  const [scrapingLi, setScrapingLi] = useState(false)
+  const [scrapeResult, setScrapeResult] = useState(null)
   const [error, setError]       = useState('')
   const [search, setSearch]     = useState('')
 
-  useEffect(() => { if (user === null) router.push('/') }, [user])
+  useEffect(() => { if (user === null) router.push('/login') }, [user])
 
   useEffect(() => {
     if (!id || !user) return
@@ -103,11 +238,12 @@ export default function BasePage() {
   // baseData uniquement pour l'autostart — sinon on utilise le state `base`
   // IMPORTANT: onClick passe un SyntheticEvent comme premier arg, il faut l'ignorer
   // baseData uniquement pour l'autostart — sinon on utilise le state `base`
-  async function generate(baseData) {
+  async function generate(baseData, opts = {}) {
     const b = (baseData && baseData.id) ? baseData : base
     if (!b) { setError('Données non chargées — rechargez la page.'); return }
+    const isDelta = opts.delta === true
     setRunning(true); setError('')
-    setLogs([{ msg: 'Démarrage…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
+    setLogs([{ msg: isDelta ? 'Recherche de contacts supplémentaires…' : 'Démarrage…', type: 'i', ts: new Date().toLocaleTimeString('fr-FR') }])
 
     const addLog = (msg, type = 'i') =>
       setLogs(prev => [...prev, { msg, type, ts: new Date().toLocaleTimeString('fr-FR') }])
@@ -238,10 +374,18 @@ export default function BasePage() {
       // ── Étape 2+3 : Icypeas côté serveur via SSE ──
       addLog('↗ Icypeas — recherche contacts + emails…', 't')
 
+      const reqBody = { companies }
+      if (isDelta) {
+        reqBody.excludeProfileUrls = contacts
+          .map(c => c.linkedin_url)
+          .filter(Boolean)
+        addLog(`Mode delta : on exclut ${reqBody.excludeProfileUrls.length} profils déjà en base`, 'i')
+      }
+
       const es = await fetch(`/api/bases/${id}/pipeline`, {
         method:  'POST',
         headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companies }),
+        body: JSON.stringify(reqBody),
       })
 
       if (!es.ok) {
@@ -302,6 +446,22 @@ export default function BasePage() {
       fetchContacts()
     } catch (e) { setError(e.message) }
     setEnriching(false)
+  }
+
+  async function scrapeLinkedIn() {
+    setScrapingLi(true); setScrapeResult(null); setError("")
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch(`/api/bases/${id}/scrape-profiles`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || "Erreur")
+      setScrapeResult(d)
+      fetchContacts()
+    } catch (e) { setError(e.message) }
+    setScrapingLi(false)
   }
 
 
@@ -376,12 +536,22 @@ export default function BasePage() {
         {/* Progress */}
         {isGenerating && <Progress pct={running ? 50 : (base?.generation_pct||0)} logs={logs} />}
 
+        {/* Preview count — affiché seulement si base vide pour aider à anticiper */}
+        {!isGenerating && contacts.length === 0 && (
+          <PreviewCount base={base} supabase={supabase} />
+        )}
+
         {/* Actions bar */}
         {!isGenerating && (
           <div style={{ display:'flex', gap:10, marginBottom:20, padding:'14px 18px', background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh1)', alignItems:'center', flexWrap:'wrap' }}>
-            <button className="btn btn-primary" onClick={generate}>
+            <button className="btn btn-primary" onClick={() => generate()}>
               {contacts.length > 0 ? '↺ Régénérer' : '◎ Trouver les contacts'}
             </button>
+            {contacts.length > 0 && (
+              <button className="btn btn-secondary" onClick={() => generate(null, { delta: true })}>
+                + {base?.n_companies || 10} contacts supplémentaires
+              </button>
+            )}
             <div style={{ height:24, width:1, background:'var(--border)' }} />
             <button className="btn btn-secondary" onClick={enrichEmails}
               disabled={enriching || contacts.length === 0}>
@@ -389,9 +559,20 @@ export default function BasePage() {
                 ? <><span className="spinner" style={{ width:14, height:14 }} /> Enrichissement…</>
                 : '✉ Enrichir les emails'}
             </button>
+            <button className="btn btn-secondary" onClick={scrapeLinkedIn}
+              disabled={scrapingLi || contacts.filter(c => c.linkedin_url).length === 0}>
+              {scrapingLi
+                ? <><span className="spinner" style={{ width:14, height:14 }} /> Scraping…</>
+                : '💼 Enrichir LinkedIn'}
+            </button>
             {enrichResult && (
               <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
                 ✓ {enrichResult.enriched}/{enrichResult.total} emails trouvés
+              </span>
+            )}
+            {scrapeResult && (
+              <span style={{ fontSize:12, color:'var(--green)', fontWeight:500 }}>
+                ✓ {scrapeResult.enriched}/{scrapeResult.total} profils enrichis
               </span>
             )}
             <div style={{ marginLeft:'auto', fontFamily:'var(--fm)', fontSize:12, color:'var(--t3)' }}>

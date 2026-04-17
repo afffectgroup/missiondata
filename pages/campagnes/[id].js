@@ -152,7 +152,7 @@ export default function CampaignDetail() {
   const [vaSaved, setVaSaved] = useState(false)
   const [vaSaving, setVaSaving] = useState(false)
 
-  useEffect(() => { if (user === null) router.push('/') }, [user])
+  useEffect(() => { if (user === null) router.push('/login') }, [user])
 
   useEffect(() => {
     if (!id || !user) return
